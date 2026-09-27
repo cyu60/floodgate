@@ -4,12 +4,15 @@
 //   2. add it to PROVIDERS in providers/index.js
 //   3. chrome://extensions -> Floodgate -> reload. It shows up in Dashboard -> Model.
 //
-// A provider can do any mix of four jobs. Floodgate calls only the methods you define:
+// A provider can do any mix of these jobs. Floodgate calls only the methods you define:
 //
 //   classify(page, ctx, cfg) -> { p, reason?, model? }   DECIDE: P(distraction) for this page (0..1). Throw to fall back.
 //   enrich(page, ctx, cfg)   -> { key: "text", ... }      CONTEXT: extra facts merged into the state the model sees
 //                                                          (e.g. what GBrain knows you are working on). 2 s budget.
 //   onLabel(label, ctx, cfg)                              LEARN: the user labelled a page (overrides, nudges, Teach tab).
+//   recall(page, ctx, cfg)   -> { p, reason, source } | null   MEMORY: a remembered verdict for this page and task
+//                                                          (wins over the model, loses to local labels). 2.5 s budget.
+//                                                          GBrain does this; a Memorable provider would do the same.
 //   onContext(ctx, cfg)                                   The task, mode or "about me" changed.
 //   health(cfg) -> { ok, detail }                         Status dot + "Test connection" in the dashboard.
 //

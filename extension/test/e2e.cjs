@@ -281,6 +281,15 @@ const freePort = async () => {
   check(/Floodgate correction.*Minecraft speedrun any percent.*ON TASK/.test(recall), "override was remembered in GBrain (onLabel)");
   const lastG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).find((e) => /Minecraft speedrun any/.test(e.title));
   check(lastG && !lastG.providerError, "decision still works with GBrain enrichment on");
+  // GBrain as memory: wipe this browser's labels (like a new laptop) and the correction still comes back from GBrain
+  const savedLabels = await sw.evaluate(async () => (await chrome.storage.local.get("labels")).labels);
+  await sw.evaluate(() => chrome.storage.local.set({ labels: [] }));
+  await sleep(300);
+  await page.goto(SITE("tube.fgtest", "Minecraft speedrun any percent"));
+  await sleep(2500);
+  const fromG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
+  check(!(await ui()).block && fromG.source === "GBrain memory", `with no local labels, GBrain's memory decides (${fromG.source}: ${fromG.reason})`);
+  await sw.evaluate((l) => chrome.storage.local.set({ labels: l }), savedLabels);
   await set({ enrichers: {} });
 
   // 13b. the default provider: a Jev-compatible /v1/systemone with a bearer token (stand-in for the ngrok River model)

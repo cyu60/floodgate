@@ -48,6 +48,19 @@ async function enrich(page, ctx, settings) {
   return Object.assign({}, ...parts.filter((r) => r.status === "fulfilled" && r.value).map((r) => r.value));
 }
 
+// Memory providers (GBrain, Memorable, ...): corrections remembered outside this browser. First confident hit wins.
+async function remoteRecall(page, ctx, settings) {
+  for (const p of PROVIDERS.filter((x) => x.recall && settings.enrichers?.[x.id])) {
+    try {
+      const r = await withTimeout(p.recall(page, ctx, providerConfig(p, settings)), 2500, p.name);
+      if (r && typeof r.p === "number") return { ...r, source: r.source || p.name };
+    } catch {
+      // a memory that can't be reached just doesn't vote
+    }
+  }
+  return null;
+}
+
 /**
  * @returns {Promise<{action:"allow"|"nudge"|"block", p:number|null, reason:string, source:string, ms:number, heuristic_p?:number, providerError?:string}>}
  */
@@ -73,11 +86,17 @@ export async function classify(page, settings, labels, { onPending } = {}) {
   let source = "offline heuristic";
   let error;
 
-  if (mem && mem.confidence >= 0.95) {
+  const localHit = mem && mem.confidence >= 0.95;
+  const launchPad = isLaunchPad(page.url);
+  const remote = !localHit && !launchPad && ctx.task && settings.mode !== "break" ? await remoteRecall(page, ctx, settings) : null;
+
+  if (localHit) {
     [p, reason, source] = [mem.p, mem.reason, "your labels"];
-  } else if (isLaunchPad(page.url)) {
+  } else if (launchPad) {
     // A site's home page is where you search for the thing you need (YouTube's home, a search box); judge what you open next.
     return done({ action: "allow", p: null, source: "rules", reason: "Home page: open so you can search. Floodgate checks what you open next." });
+  } else if (remote) {
+    [p, reason, source] = [remote.p, remote.reason, remote.source];
   } else {
     const provider = byId(settings.provider) || byId("heuristic");
     // Break mode and "no task yet" never block, so they never spend a model call.
