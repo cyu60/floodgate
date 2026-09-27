@@ -14,7 +14,7 @@ In one afternoon at the Own Your Intelligence Hackathon, we went from "can an op
 
 1. **Proved the core idea on River.** Open-Jev's decision head starts as `logit(Yes) − logit(No)`. River returns exactly that from any open model, so an untrained model on River already behaves like Open-Jev at step 0. No GPU, no custom head.
 2. **Ported Open-Jev's System One API** (noul, choice, score, confidence, legend) so requests and responses are byte-compatible with Jev's `POST /v1/systemone`.
-3. **Trained our own open Jev on River**, then **a personal model on the user's own browsing** (69% to 80% agreement on held-out personal pages).: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
+3. **Trained our own open Jev on River**, then **a personal model on the user's own browsing** (about 66–69% to 77–80% agreement on held-out personal pages).: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
 4. **Served it as a Jev-compatible API.** The same `curl` that works against TypeSafe's Jev works against our checkpoint.
 5. **Built Floodgate**, a Chrome extension plus local gate. It asks the model "is this page a distraction from my stated task?" on every navigation, locks the page above a threshold, and logs every "this is on task" override as a new training row.
 6. **Benchmarked against real Jev.** Our trained model matches or beats Jev on the obvious calls. Neither model knows where *your* task begins and ends, and that is the gap Floodgate closes with personal training.
@@ -30,8 +30,12 @@ The point of Floodgate is a model of **your** judgment, so the second model is t
 
 | Model, on your held-out pages | Agreement with your labels | Brier (lower is better) |
 |---|---:|---:|
-| Untrained base | 69.2% | 0.160 |
-| **Your model (`floodgate-personal-v1`)** | **80.0%** | **0.056** |
+| Untrained base | 66–69% | 0.160 |
+| **Your model (`floodgate-personal-v1`)** | **77–80%** | **0.056** |
+
+Ranges: 80.0% / 69.2% measured during training on live weights; 76.9% / 66.2% re-measured through the saved checkpoint (River rounds logprobs; on 65 rows that is a two-row swing).
+
+**SemIf readout works on the same fine-tuned model.** Asking the same held-out pages SemIf's way (options A. No / B. Yes, read the letter scores) gives the personal model **76.9%, identical** to the Yes/No prompt it was trained on (Brier 0.057 vs 0.056), while the untrained model scores 61.5% with letters vs 66.2% with Yes/No. The fine-tune learned the judgment, not the phrasing.
 
 **The same page, two tasks (live gate, 15:18):**
 
