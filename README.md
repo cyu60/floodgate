@@ -63,6 +63,34 @@ Open-Jev public rows ──▶ each option becomes a Yes/No check ──▶ Rive
 5. **Use it:** the saved checkpoint serves Jev-format answers; Floodgate asks it about every page you open.
 6. **Make it yours:** train again with `--extra your_rows.jsonl`. The result is a `river://` checkpoint you own and can share.
 
+## Results (Sep 27, 14:19)
+
+Trained on River in 20 steps (~25 minutes): LoRA r8 + `train_unembed` on `Qwen/Qwen3.6-35B-A3B-FP8`, 1,164 Open-Jev rows, 2 epochs. Model card: [`models/open-jev-river-v1.json`](models/open-jev-river-v1.json).
+
+**General decision skill (Open-Jev held-out rows, calibrated):**
+
+| Split | Untrained base | Trained on River | |
+|---|---:|---:|---|
+| Test accuracy (228 rows) | 69.7% | **86.2%** | +16.5 pts |
+| Test NLL | 0.803 | **0.450** | −44% |
+| Test Brier | 0.410 | **0.221** | −46% |
+| OOD accuracy (115 rows, unseen task types) | 75.4% | **87.7%** | +12.3 pts |
+| OOD NLL | 0.610 | **0.378** | −38% |
+
+By question type on test: noul 0.88 → 0.93, choice 0.63 → 0.81, score 0.50 → 0.89.
+
+**The Floodgate question (task = "research TypeSafe's Jev model for the hackathon"):**
+
+| Page | Jev 1.13 | Ours, trained on public data |
+|---|---:|---:|
+| Fireship video on Jev (on task) | 0.57 | 0.53 |
+| Satellite-launch explainer (informative, off task) | 0.95 | 0.96 |
+| TypeSafe's own Noul docs (on task) | 0.76 | 0.58 |
+| GTA 6 gameplay | 0.96 | 0.97 |
+| Same satellite video, task = "report on launch failures" | 0.35 | 0.42 |
+
+Training on public tasks made the model a much better general judge and it now matches or beats Jev on the obvious calls, but neither model reliably knows where *your* task starts and ends. That is exactly the gap Floodgate closes: the next training round uses your own browsing labels and overrides (`--extra`), which no general model has.
+
 ## Quick start
 
 ```bash

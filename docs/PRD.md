@@ -101,14 +101,14 @@ open_jev.server :8791  POST /v1/systemone  (same body/response as api.typesafe.a
 
 | Metric | Baseline (untrained base, measured) | Target |
 |---|---|---|
-| Open-Jev test accuracy (228 rows) | 69.7% | trained > base |
-| Open-Jev test NLL, calibrated | 0.803 | trained < base |
-| Open-Jev OOD accuracy (115 rows) | 75.4% | no regression |
+| Open-Jev test accuracy (228 rows) | 69.7% | trained > base → **86.2% ✓** |
+| Open-Jev test NLL, calibrated | 0.803 | trained < base → **0.450 ✓** |
+| Open-Jev OOD accuracy (115 rows) | 75.4% | no regression → **87.7% ✓** |
 | Gate: agreement with hand labels | TBD | > 90% |
 | Gate: decision latency | ~4 s cold, 0 ms cached | < 1 s needs a deployment |
 | Overrides turned into training rows | 0 | every override logged |
 
-Trained results: see `data/runs/open-jev-river-v1-*.json` and the README results table.
+Trained 14:19 in 20 River steps; model card `models/open-jev-river-v1.json`. On the task-relative gate cases, general training alone does not fix them (Noul docs 0.58, same video under a new task 0.42), which is the case for personal training.
 
 ## 9. Demo script (5 minutes)
 
