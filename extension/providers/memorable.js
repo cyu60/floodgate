@@ -75,16 +75,18 @@ function textOf(result) {
   return (result?.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
 }
 
-/** The procedure text for this task, cached for a minute. "" when there is nothing to recall. */
+/** The procedure text for this task, cached for a minute. "" when there is nothing to recall.
+ *  Keyed by connection as well as task: editing the endpoint or token must not serve the old server's answer. */
 async function procedureFor(ctx, cfg) {
-  const hit = cache.get(ctx.task);
+  const key = `${cfg.endpoint}|${cfg.token}|${ctx.task}`;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.text;
   const tools = await connect(cfg);
   const r = pick(tools, /recall|inject|procedure|workflow|search|find/i, cfg.recallTool);
   if (!r) return "";
   const out = await rpc(cfg, "tools/call", { name: r.name, arguments: argsFor(r, ctx.task) });
   const text = textOf(out).slice(0, 400);
-  cache.set(ctx.task, { at: Date.now(), text });
+  cache.set(key, { at: Date.now(), text });
   return text;
 }
 
