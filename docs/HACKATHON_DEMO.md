@@ -27,10 +27,19 @@ Choose “Same page. Different person.” and switch between Alice and Bob. Bob 
 Cedar pitch, so his brain returns presentation context. Alice's technical notes
 stay in her own brain. Knowing someone is not permission to read their memories.
 
-For the browser-gate portion, run the gate with Alice's brain, set an Atlas task,
-and visit a relevant page. Inspect `/memory` to show what the scorer receives.
+For the browser-gate portion, stop the memory demo server, then run the gate
+with Alice's brain and the `models/floodgate-personal-v1.json` model card using
+the [setup command](GBRAIN_INTEGRATION_PLAN.md). In the v0.2 extension, choose **Dashboard → Model →
+River open Jev (gate server)**, set an Atlas task, and visit a relevant page.
+Inspect `http://127.0.0.1:8790/memory` for the graph evidence available to the gate.
 An override records a correction for that task and page. The graph provides
 evidence; a lower River score is something to measure, not a guaranteed result.
+The extension's own saved labels can also affect its next decision immediately;
+that behavior is separate from retraining the River model.
+
+Leave the browser's optional **GBrain memory** context provider off for this
+walkthrough. The Python gate already reads Alice's local graph over stdio;
+the browser provider connects separately to a hosted HTTP MCP workspace.
 
 A relational database could represent these relationships with tables and joins.
 Our demonstration is about following several connections, preserving the source

@@ -1,0 +1,10 @@
+{
+  "name": "floodgate-extension",
+  "private": true,
+  "type": "module",
+  "description": "Only here for the tests (ES modules, npm scripts). Chrome ignores this file.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "e2e": "node test/e2e.cjs"
+  }
+}

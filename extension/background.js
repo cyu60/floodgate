@@ -1,98 +1,182 @@
-// One local server owns one personal brain. Requests never select another user.
-const GATE = "http://127.0.0.1:8790";
-const seen = new Map();
-const navigation = new Map();
-const openOnce = new Map();
-let taskVersion = 0;
-let changingTask = false;
+// Service worker. content.js reports every page (full loads and YouTube-style in-app navigations) with its real
+// title; we decide, cache, log, badge the icon, and answer with allow / nudge / block for content.js to enforce.
+import { broadcastContext, broadcastLabel, classify, providerHealth } from "./lib/classifier.js";
+import { MODES } from "./lib/config.js";
+import { addLabel, appendLog, bumpStat, getLabels, getSettings, getStats, setSettings } from "./lib/store.js";
+import { canonicalUrl } from "./lib/text.js";
 
-async function gate(path, body) {
-  const response = await fetch(`${GATE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Gate unavailable");
-  return result;
+const CACHE_MS = 10 * 60 * 1000;
+const cache = new Map(); // "provider|mode|task|profile|url" -> {d, at}
+const inflight = new Map(); // same key -> Promise, so a double report costs one model call
+
+const cacheKey = (s, url) => [s.provider, s.mode, s.task, s.profile, canonicalUrl(url)].join("|");
+
+// ---- per-tab state and temporary passes, in storage.session so they survive service-worker restarts ----
+const tabKey = (tabId) => `tab:${tabId}`;
+async function getTab(tabId) {
+  return (await chrome.storage.session.get(tabKey(tabId)))[tabKey(tabId)] || null;
+}
+const setTab = (tabId, v) => chrome.storage.session.set({ [tabKey(tabId)]: v });
+
+async function passFor(url) {
+  const { passes = {} } = await chrome.storage.session.get("passes");
+  return passes[canonicalUrl(url)] > Date.now() ? passes[canonicalUrl(url)] : 0;
+}
+async function addPass(url, minutes) {
+  const { passes = {} } = await chrome.storage.session.get("passes");
+  const now = Date.now();
+  for (const k of Object.keys(passes)) if (passes[k] < now) delete passes[k];
+  passes[canonicalUrl(url)] = now + minutes * 60 * 1000;
+  await chrome.storage.session.set({ passes });
 }
 
-chrome.webNavigation.onCommitted.addListener(async ({ tabId, url, frameId }) => {
-  if (frameId !== 0) return;
-  const visit = (navigation.get(tabId) || 0) + 1;
-  navigation.set(tabId, visit);
-  const version = taskVersion;
-  if (!/^https?:/.test(url)) {
-    seen.delete(tabId);
-    return;
+// ---- badge: the percent on the toolbar icon, colored by the action ----
+const COLORS = { block: "#e11d48", nudge: "#d97706", allow: "#059669", off: "#64748b" };
+function setBadge(tabId, d, settings) {
+  const off = settings.mode === "break" || settings.pausedUntil > Date.now() || d.p == null;
+  const text = d.p == null ? "" : String(Math.round(d.p * 100));
+  chrome.action.setBadgeText({ tabId, text }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ tabId, color: off ? COLORS.off : COLORS[d.action] }).catch(() => {});
+}
+
+async function decide(tabId, page) {
+  const settings = await getSettings();
+  const pass = await passFor(page.url);
+  if (pass) {
+    const until = new Date(pass).toTimeString().slice(0, 5);
+    const d = { url: page.url, action: "allow", p: null, source: "pass", reason: `You let this page through until ${until}`, ms: 0 };
+    await setTab(tabId, { page, decision: d });
+    setBadge(tabId, d, settings);
+    return d;
   }
-  if (changingTask) return;
-  const permit = openOnce.get(tabId);
-  openOnce.delete(tabId);
-  if (permit && permit.url === url && permit.version === version && permit.expires > Date.now()) {
-    seen.delete(tabId); // The next visit must be judged again, even for this URL.
-    return;
+  const key = cacheKey(settings, page.url);
+  const hit = cache.get(key);
+  let d;
+  if (hit && Date.now() - hit.at < CACHE_MS) d = { ...hit.d, cached: true, ms: 0 };
+  else {
+    if (!inflight.has(key)) {
+      const pending = () => chrome.tabs.sendMessage(tabId, { type: "fg:pending", url: page.url }).catch(() => {});
+      const run = async () => {
+        const d = await classify(page, settings, await getLabels(), { onPending: pending });
+        // Offline fallbacks are not cached, so the model gets asked again as soon as it is back.
+        if (!d.providerError) cache.set(key, { d, at: Date.now() });
+        await appendLog({ ts: Date.now(), title: page.title, ...d });
+        await bumpStat("checked");
+        if (d.action === "block") await bumpStat("blocked");
+        if (d.action === "nudge") await bumpStat("nudged");
+        return d;
+      };
+      inflight.set(key, run().finally(() => inflight.delete(key)));
+    }
+    d = await inflight.get(key);
   }
-  seen.set(tabId, url);
-  let title = "";
-  try { title = (await chrome.tabs.get(tabId)).title || ""; } catch { return; }
-  let decision;
-  try { decision = await gate("/", { url, title }); }
-  catch (error) { seen.delete(tabId); console.warn("Gate unavailable", error.message); return; }
-  // River may reply after a later navigation or a task change. Never redirect it.
-  if (navigation.get(tabId) !== visit || taskVersion !== version || seen.get(tabId) !== url) return;
-  let current;
-  try { current = await chrome.tabs.get(tabId); } catch { return; }
-  if (current.url !== url || (current.pendingUrl && current.pendingUrl !== url)) return;
-  await chrome.storage.local.set({ last: { url, title, ...decision, at: Date.now() } });
-  if (navigation.get(tabId) !== visit || taskVersion !== version) return;
-  if (decision.lock) {
-    try { current = await chrome.tabs.get(tabId); } catch { return; }
-    if (navigation.get(tabId) !== visit || taskVersion !== version || current.url !== url
-      || (current.pendingUrl && current.pendingUrl !== url)) return;
-    const query = new URLSearchParams({ p: decision.p, u: url, t: title, task: decision.task });
-    await chrome.tabs.update(tabId, { url: chrome.runtime.getURL(`lock.html?${query}`) });
+  await setTab(tabId, { page, decision: d });
+  setBadge(tabId, d, settings);
+  return d;
+}
+
+async function recheckTabs({ all = false } = {}) {
+  const tabs = await chrome.tabs.query({});
+  for (const t of tabs) {
+    const state = all || t.active ? null : await getTab(t.id);
+    if (all || t.active || (state && state.decision?.action !== "allow")) chrome.tabs.sendMessage(t.id, { type: "fg:recheck" }).catch(() => {});
   }
+}
+
+// `task` is passed when labelling a past visit (dashboard log, Teach tab); otherwise the current task applies.
+async function label({ page, label, kind, scope, decision, task }) {
+  const settings = await getSettings();
+  const l = await addLabel({
+    page,
+    label,
+    kind,
+    scope,
+    task: task ?? settings.task,
+    profile: settings.profile,
+    mode: settings.mode,
+    model_p: decision?.p ?? null,
+  });
+  cache.clear();
+  broadcastLabel(l, settings).catch(() => {});
+  return l;
+}
+
+const HANDLERS = {
+  // from content.js
+  "fg:classify": ({ page }, sender) => decide(sender.tab.id, page),
+  "fg:label": async (msg) => ({ ok: true, label: await label(msg) }),
+  "fg:allow": async ({ page, minutes }) => (await addPass(page.url, minutes), { ok: true }),
+  "fg:setTask": async ({ task }) => (await setSettings({ task }), cache.clear(), { ok: true }),
+  "fg:leave": async (_, sender) => {
+    try {
+      await chrome.tabs.goBack(sender.tab.id);
+    } catch {
+      await chrome.tabs.update(sender.tab.id, { url: "chrome://newtab/" });
+    }
+    return { ok: true };
+  },
+  "fg:openDashboard": async ({ hash = "" }) => (await chrome.tabs.create({ url: chrome.runtime.getURL(`pages/dashboard.html${hash}`) }), { ok: true }),
+
+  // from the popup and dashboard
+  "fg:state": async ({ tabId }) => {
+    const settings = await getSettings();
+    return { settings, stats: await getStats(), tab: tabId ? await getTab(tabId) : null, labels: (await getLabels()).length };
+  },
+  "fg:health": async () => providerHealth(await getSettings()),
+  "fg:labelTab": async ({ tabId, label: value, scope }) => {
+    const state = await getTab(tabId);
+    if (!state?.page) throw new Error("No page decided in this tab yet");
+    const l = await label({ page: state.page, label: value, kind: "popup", scope, decision: state.decision });
+    chrome.tabs.sendMessage(tabId, { type: "fg:recheck" }).catch(() => {});
+    return { ok: true, label: l };
+  },
+  "fg:recheck": async () => (cache.clear(), await recheckTabs({ all: true }), { ok: true }),
+};
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const handler = HANDLERS[msg?.type];
+  if (!handler) return false;
+  Promise.resolve(handler(msg, sender)).then(sendResponse, (e) => sendResponse({ error: String(e?.message || e) }));
+  return true; // async response
 });
 
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (!["setTask", "override"].includes(message.type)) return;
-  (async () => {
-    if (message.type === "setTask") {
-      taskVersion += 1;
-      seen.clear();
-      openOnce.clear();
-      changingTask = true;
-      try {
-        const result = await gate("/task", { task: message.task });
-        await chrome.storage.local.remove("last");
-        return { ok: true, ...result };
-      } finally { changingTask = false; }
-    }
-    if (!sender.tab || !sender.url?.startsWith(chrome.runtime.getURL("lock.html?"))) {
-      throw new Error("Open the page from its Floodgate lock screen");
-    }
-    const target = new URL(message.url);
-    if (!["http:", "https:"].includes(target.protocol)) throw new Error("Invalid page URL");
-    const version = taskVersion;
-    const result = await gate("/override", {
-      url: message.url, title: message.title, task: message.task,
-      label: 0.0, model_p: message.p,
-    });
-    if (version !== taskVersion) throw new Error("Task changed; reopen the page for your new task");
-    const current = await chrome.tabs.get(sender.tab.id);
-    if (current.url !== sender.url) throw new Error("Page changed before the correction was saved");
-    openOnce.set(sender.tab.id, { url: message.url, version, expires: Date.now() + 15000 });
-    seen.delete(sender.tab.id);
-    await chrome.tabs.update(sender.tab.id, { url: message.url });
-    return { ok: true, ...result };
-  })().then(respond).catch(error => respond({ ok: false, error: error.message }));
-  return true;
+// Settings are written by the popup, dashboard and overlay; react to any change in one place.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.labels) cache.clear();
+  if (!changes.settings) return;
+  const before = changes.settings.oldValue || {};
+  const after = changes.settings.newValue || {};
+  const changed = (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]);
+  const decisive = ["task", "mode", "profile", "provider", "providerSettings", "enrichers", "allowDomains", "blockDomains", "pausedUntil"];
+  if (!decisive.some(changed)) return;
+  cache.clear();
+  if (["task", "profile", "mode", "provider"].some(changed)) getSettings().then(broadcastContext).catch(() => {});
+  recheckTabs({ all: changed("mode") || changed("pausedUntil") }).catch(() => {});
 });
 
-chrome.tabs.onRemoved.addListener(tabId => {
-  seen.delete(tabId);
-  navigation.delete(tabId);
-  openOnce.delete(tabId);
+chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(tabKey(tabId)));
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "toggle-pause") return;
+  const s = await getSettings();
+  await setSettings({ pausedUntil: s.pausedUntil > Date.now() ? 0 : Date.now() + 15 * 60 * 1000 });
 });
+
+// When a pause ends, re-check open tabs so blocked pages lock again.
+chrome.alarms.onAlarm.addListener((a) => a.name === "pause-end" && recheckTabs({ all: true }));
+chrome.storage.onChanged.addListener((changes) => {
+  const until = changes.settings?.newValue?.pausedUntil;
+  if (until && until > Date.now()) chrome.alarms.create("pause-end", { when: until + 500 });
+});
+
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  // Content scripts only arrive in tabs opened after install; inject them into the tabs already open.
+  for (const t of await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] })) {
+    chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["content.js"] }).catch(() => {});
+  }
+  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("pages/dashboard.html#welcome") });
+});
+
+// Exposed for tests and the console: `await floodgate.decide(...)` in the service worker devtools.
+globalThis.floodgate = { decide, cache, MODES };

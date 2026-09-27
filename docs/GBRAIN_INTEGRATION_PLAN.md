@@ -1,6 +1,8 @@
 # GBrain: a second brain for each person
 
 Integration on branch `tri`. Uses a local GBrain store for each demo person.
+The v0.2 extension also has an optional browser-side GBrain context provider;
+that is a separate HTTP MCP connection, described below.
 
 Each person gets a private second brain in GBrain that remembers their goals,
 preferences, projects, and connections to friends. Their agents use those
@@ -33,19 +35,36 @@ check persistence and relationship retrieval. Stop the demo server before
 running another command against those same stores.
 Tested with GBrain `0.59.0.0` (commit `e78f1c3`).
 
-To connect Alice's brain to the real browser gate, install the project's Python
-dependencies and configure a River key as described in the README, then run:
+To connect Alice's brain to the real browser gate, stop the memory demo server,
+install the project's Python dependencies and configure a River key as described
+in the README, then run:
 
 ```sh
-python3 -m floodgate.gate_server --run models/open-jev-river-v1.json \
+python3 -m floodgate.gate_server --run models/floodgate-personal-v1.json \
   --brain-home ~/.local/share/floodgate/demo-brains/alice --user-id alice \
   --task "Ship the Atlas offline demo"
 ```
+
+This checkpoint requires access through the River account that trained it;
+use another accessible model card if needed. Load `extension/` in Chrome, then
+choose **Dashboard → Model → River open Jev (gate server)** with endpoint
+`http://127.0.0.1:8790`. Set the same Atlas task in the extension. Its default
+offline heuristic does not call the Python gate. See the
+[extension guide](../extension/README.md) for modes and model selection.
 
 Memory is optional. The gate retrieves related evidence, saves explicit task/page
 corrections, and clears stale scores when context changes. If memory fails, the
 River gate continues and reports that memory is unavailable. Overrides are
 saved as events; they do not automatically retrain the model.
+
+For this local graph demo, leave the extension's **GBrain memory** context-provider
+toggle off. The Python gate already owns the stdio connection to Alice's local
+brain and supplies the graph evidence. Enabling the browser provider adds a
+separate connection to its configured HTTP MCP endpoint (by default
+`https://gbrain.io/mcp`), with its own credentials and workspace permissions.
+It does not attach to these local stores or inherit their owner binding. The
+local graph integration and restart checks here do not verify a hosted GBrain
+account; verify that provider's actual read/write round trip separately.
 
 The implementation is split into `gbrain.py` (connection), `memory.py` (owned
 graph), `memory_demo.py` (presentation), and `gate_server.py` (decisions).
@@ -59,7 +78,9 @@ FLOODGATE_GBRAIN_COMMAND="$(command -v gbrain)" python3 -m unittest discover -s 
 The server chooses which brain an agent can access. A name or user ID in a
 request is not permission, and the computer's operator can access the local
 stores. Page details and relevant memories go to River during scoring; this
-local GBrain demo does not use a cloud memory or embedding provider.
+local GBrain demo does not use a cloud memory or embedding provider. If the
+optional browser HTTP provider is enabled, it also sends task queries and
+correction notes to the configured memory endpoint.
 
 Sharing selected memories between friends comes after this demo. Friendship
 alone never grants access. The current gate has no user accounts, so real users

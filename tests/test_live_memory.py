@@ -142,8 +142,8 @@ class LiveMemoryTests(unittest.TestCase):
                             status, decision = request(address, "POST", "/decide", {"url": url, "title": "Quiet Harbor"})
                             self.assertEqual(status, 200, decision)
                             model_state = observed_records[-1][0]["state"]
-                            self.assertEqual(model_state["stated_task"], task)
-                            model_memory = model_state["personal_memory"]
+                            self.assertIn(f"Stated task: {task}.", model_state)
+                            model_memory = json.JSONDecoder().raw_decode(model_state.split(gate.MEMORY_MARKER, 1)[1])[0]
                             self.assertIn("harbor", [node["key"] for node in model_memory["evidence"]])
                             self.assertTrue(any(len(path["edges"]) == 3 for path in model_memory["paths"]))
                             self.assertIn("Synthetic integration fixture", json.dumps(model_memory))
@@ -175,7 +175,7 @@ class LiveMemoryTests(unittest.TestCase):
                             status, decision = request(address, "POST", "/decide", {"url": url, "title": "Quiet Harbor"})
                             self.assertEqual(status, 200, decision)
                             self.assertEqual(scorer.call_count, 2)
-                            corrections = [node for node in observed_records[-1][0]["state"]["personal_memory"]["evidence"]
+                            corrections = [node for node in json.JSONDecoder().raw_decode(observed_records[-1][0]["state"].split(gate.MEMORY_MARKER, 1)[1])[0]["evidence"]
                                            if node["kind"] == "correction"]
                             self.assertEqual([node["metadata"]["label"] for node in corrections], [1])
 

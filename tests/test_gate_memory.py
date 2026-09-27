@@ -11,12 +11,17 @@ from unittest.mock import patch
 from floodgate import gate_server as gate
 
 
+def model_memory(state):
+    return json.JSONDecoder().raw_decode(state.split(gate.MEMORY_MARKER, 1)[1])[0]
+
+
 class FakeMemory:
     def __init__(self, owner_id="alice"):
         self.owner_id = owner_id
         self.revision = 0
         self.fail = False
         self.writes = []
+        self.reads = []
         self.evidence = [{"slug": "shared/project", "body": "Bob's research supports Alice's project"}]
         self.paths = [{"slugs": ["alice", "project", "bob", "research"],
                        "edges": [{"from": "alice", "to": "project", "relation": "working-on"}]}]
@@ -25,6 +30,7 @@ class FakeMemory:
         return {"available": not self.fail, "private_command": "do-not-expose"}
 
     def context(self, task, url="", title="", limit=8):
+        self.reads.append((task, url, title))
         if self.fail:
             raise RuntimeError("sensitive process detail")
         return {"owner_id": self.owner_id, "evidence": self.evidence, "paths": self.paths}
@@ -45,7 +51,7 @@ class FakeMemory:
 class GateMemoryTests(unittest.TestCase):
     def setUp(self):
         self.state = gate.STATE.copy()
-        gate.STATE.update(task="prepare launch", threshold=0.7, checkpoint=None, temperature=1.0)
+        gate.STATE.update(task="prepare launch", threshold=0.7, checkpoint=None, temperature=1.0, profile="", use_about_me=False)
         gate.CACHE.clear()
         self.temp = tempfile.TemporaryDirectory()
         self.memory = FakeMemory()
@@ -81,54 +87,88 @@ class GateMemoryTests(unittest.TestCase):
         return result
 
     def test_graph_evidence_reaches_model_and_response(self):
-        decision = gate.decide(None, None, "https://example.com/research", "Bob's research", self.memory)
+        decision = gate.decide(None, None, "https://example.com/research", "Bob's research", memory=self.memory)
         state = self.records[0][0]["state"]
-        self.assertEqual(state["personal_memory"]["owner_id"], "alice")
-        self.assertEqual(state["personal_memory"]["paths"], self.memory.paths)
+        self.assertEqual(model_memory(state)["owner_id"], "alice")
+        self.assertEqual(model_memory(state)["paths"], self.memory.paths)
         self.assertEqual(decision["memory"]["evidence"], self.memory.evidence)
         self.assertTrue(decision["memory"]["available"])
         self.assertNotIn("private_command", decision["memory"])
 
     def test_cache_tracks_owner_task_revision_title_and_content(self):
         url = "https://example.com"
-        gate.decide(None, None, url, "research", self.memory)
-        gate.decide(None, None, url + "#same-page", "research", self.memory)
+        gate.decide(None, None, url, "research", memory=self.memory)
+        gate.decide(None, None, url + "#same-page", "research", memory=self.memory)
         self.assertEqual(self.scorer.call_count, 1)
         self.memory.revision += 1
-        gate.decide(None, None, url, "research", self.memory)
+        gate.decide(None, None, url, "research", memory=self.memory)
         gate.STATE["task"] = "new task"
-        gate.decide(None, None, url, "research", self.memory)
-        gate.decide(None, None, url, "research", FakeMemory("bob"))
-        gate.decide(None, None, url, "new title", self.memory)
+        gate.decide(None, None, url, "research", memory=self.memory)
+        gate.decide(None, None, url, "research", memory=FakeMemory("bob"))
+        gate.decide(None, None, url, "new title", memory=self.memory)
         self.memory.evidence.append({"body": "new shared fact"})
-        gate.decide(None, None, url, "new title", self.memory)
+        gate.decide(None, None, url, "new title", memory=self.memory)
         self.assertEqual(self.scorer.call_count, 6)
 
     def test_memory_outage_drops_stale_context_and_recovery_works(self):
         url = "https://example.com"
-        gate.decide(None, None, url, "research", self.memory)
+        gate.decide(None, None, url, "research", memory=self.memory)
         self.memory.fail = True
-        result = gate.decide(None, None, url, "research", self.memory)
+        result = gate.decide(None, None, url, "research", memory=self.memory)
         self.assertFalse(result["memory"]["available"])
         self.assertEqual(result["memory"]["evidence"], [])
-        self.assertNotIn("personal_memory", self.records[-1][0]["state"])
+        self.assertNotIn(gate.MEMORY_MARKER, self.records[-1][0]["state"])
         self.assertNotIn("sensitive", json.dumps(result))
         self.memory.fail = False
-        self.assertTrue(gate.decide(None, None, url, "research", self.memory)["memory"]["available"])
+        self.assertTrue(gate.decide(None, None, url, "research", memory=self.memory)["memory"]["available"])
 
     def test_no_memory_retains_original_decision_shape(self):
         result = gate.decide(None, None, "https://example.com", "", None)
         self.assertEqual(set(result), {"p", "lock", "task"})
-        self.assertNotIn("personal_memory", self.records[0][0]["state"])
+        self.assertNotIn(gate.MEMORY_MARKER, self.records[0][0]["state"])
+        self.assertRegex(self.records[0][0]["state"], r"^URL: https://example.com Title: \. Time: \d{2}:\d{2} \w+\. Stated task: prepare launch\.$")
+
+    def test_per_request_task_and_opt_in_profile_preserve_training_text(self):
+        status, result = self.request("POST", "/decide", {
+            "url": "https://example.com", "title": "resource", "task": "Atlas research",
+            "about_me": "I study distributed systems", "user_id": "bob",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["task"], "Atlas research")
+        self.assertEqual(result["memory"]["owner_id"], "alice")
+        self.assertEqual(self.memory.reads[-1][0], "Atlas research")
+        self.assertEqual(gate.STATE["task"], "prepare launch")
+        self.assertIn("Stated task: Atlas research.", self.records[-1][0]["state"])
+        self.assertNotIn("About me:", self.records[-1][0]["state"])
+        gate.STATE["use_about_me"] = True
+        gate.decide(None, None, "https://example.com", "resource", "Atlas research", "I study distributed systems", memory=self.memory)
+        self.assertIn(" About me: I study distributed systems.", self.records[-1][0]["state"])
+        self.assertEqual(self.scorer.call_count, 2)
+
+    def test_profile_fallback_and_model_hot_swap_are_validated_atomically(self):
+        status, result = self.request("POST", "/task", {"profile": "Reader of practical examples"})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["profile"], "Reader of practical examples")
+        gate.STATE["use_about_me"] = True
+        gate.decide(None, None, "https://example.com", "resource", memory=self.memory)
+        self.assertIn("About me: Reader of practical examples.", self.records[-1][0]["state"])
+        status, result = self.request("POST", "/model", {"checkpoint": "river://new-checkpoint", "temperature": 0.8})
+        self.assertEqual(status, 200)
+        self.assertEqual(result, {"checkpoint": "river://new-checkpoint", "temperature": 0.8})
+        self.assertFalse(gate.CACHE)
+        for invalid in (0, -1, float("nan"), True, "hot"):
+            self.assertEqual(self.request("POST", "/model", {"checkpoint": "bad", "temperature": invalid})[0], 400)
+            self.assertEqual(gate.STATE["checkpoint"], "river://new-checkpoint")
+            self.assertEqual(gate.STATE["temperature"], 0.8)
 
     def test_task_and_override_are_written_and_invalidate_cache(self):
-        gate.decide(None, None, "https://example.com", "", self.memory)
+        gate.decide(None, None, "https://example.com", "", memory=self.memory)
         status, result = self.request("POST", "/task", {"task": "project research", "user_id": "bob"})
         self.assertEqual(status, 200)
         self.assertEqual(result["memory"]["owner_id"], "alice")
         self.assertEqual(self.memory.writes[-1], ("task", "project research"))
         self.assertFalse(gate.CACHE)
-        gate.decide(None, None, "https://example.com", "", self.memory)
+        gate.decide(None, None, "https://example.com", "", memory=self.memory)
         status, result = self.request("POST", "/override", {
             "url": "https://example.com", "title": "research", "task": "project research",
             "label": 0.0, "user_id": "bob", "extra_secret": "not-logged",
@@ -163,10 +203,10 @@ class GateMemoryTests(unittest.TestCase):
 
     def test_wrong_owner_context_is_discarded(self):
         with patch.object(self.memory, "context", return_value={"owner_id": "bob", "evidence": ["secret"]}):
-            result = gate.decide(None, None, "https://example.com", "", self.memory)
+            result = gate.decide(None, None, "https://example.com", "", memory=self.memory)
         self.assertFalse(result["memory"]["available"])
         self.assertEqual(result["memory"]["evidence"], [])
-        self.assertNotIn("personal_memory", self.records[-1][0]["state"])
+        self.assertNotIn(gate.MEMORY_MARKER, self.records[-1][0]["state"])
 
     def test_visited_site_cannot_read_memory_or_poison_task(self):
         headers = {"Origin": "https://untrusted.example"}
@@ -195,19 +235,34 @@ class GateMemoryTests(unittest.TestCase):
         self.assertEqual(self.memory.writes, [])
         self.assertEqual(gate.STATE["task"], "prepare launch")
 
-    def test_stale_lock_cannot_write_correction_for_new_task(self):
+    def test_historical_task_soft_label_keeps_exact_task_attribution(self):
         status, result = self.request("POST", "/override", {
-            "url": "https://example.com", "task": "old task",
+            "url": "https://example.com", "task": "old task", "label": 0.5,
+            "scope": "url", "mode": "focus", "kind": "dashboard", "user_id": "bob",
         })
-        self.assertEqual(status, 409)
-        self.assertEqual(result["error"], "task_changed")
+        self.assertEqual(status, 200)
+        self.assertTrue(result["memory"]["saved"])
+        self.assertEqual(result["memory"]["owner_id"], "alice")
+        self.assertEqual(self.memory.writes[-1], ("override", "old task", "https://example.com", "", 0.5))
+        self.assertEqual(gate.STATE["task"], "prepare launch")
+        row = json.loads(gate.LOG.read_text())
+        self.assertEqual((row["kind"], row["label_kind"], row["scope"], row["mode"]), ("override", "dashboard", "url", "focus"))
+
+    def test_domain_label_is_logged_without_claiming_page_memory_saved(self):
+        status, result = self.request("POST", "/override", {
+            "url": "https://example.com", "task": "old task", "label": 0.5, "scope": "domain",
+        })
+        self.assertEqual(status, 200)
+        self.assertTrue(result["logged"])
+        self.assertFalse(result["memory"]["saved"])
+        self.assertEqual(result["memory"]["reason"], "domain_scope_not_supported")
         self.assertEqual(self.memory.writes, [])
-        self.assertFalse(gate.LOG.exists())
+        self.assertEqual(json.loads(gate.LOG.read_text())["scope"], "domain")
 
     def test_model_context_has_total_size_budget(self):
         self.memory.evidence = [{"body": "x" * 10_000, "metadata": {str(i): "y" * 2000 for i in range(30)}} for _ in range(100)]
-        result = gate.decide(None, None, "https://example.com", "", self.memory)
-        self.assertLessEqual(len(json.dumps(self.records[-1][0]["state"]["personal_memory"])), 20_000)
+        result = gate.decide(None, None, "https://example.com", "", memory=self.memory)
+        self.assertLessEqual(len(json.dumps(model_memory(self.records[-1][0]["state"]))), 20_000)
         self.assertTrue(result["memory"]["available"])
 
     def test_context_budget_preserves_correction_before_graph_and_other_evidence(self):
@@ -219,8 +274,8 @@ class GateMemoryTests(unittest.TestCase):
                   "edges": [{"provenance": "y" * 1000} for _ in range(3)]} for _ in range(8)]
         found = {"owner_id": self.memory.owner_id, "evidence": large_evidence + [correction], "paths": paths}
         with patch.object(self.memory, "context", return_value=found):
-            result = gate.decide(None, None, "https://example.com", "", self.memory)
-        context = self.records[-1][0]["state"]["personal_memory"]
+            result = gate.decide(None, None, "https://example.com", "", memory=self.memory)
+        context = model_memory(self.records[-1][0]["state"])
         self.assertIn(correction, context["evidence"])
         self.assertEqual(context["paths"], [])
         self.assertLessEqual(len(json.dumps(context)), 20_000)

@@ -8,3 +8,4 @@ data/openjev/
 data/runs/*.log
 data/label_queue.json
 data/*.json
+.floodgate_token

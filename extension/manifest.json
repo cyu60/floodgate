@@ -1,11 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Floodgate",
-  "version": "0.1.0",
-  "description": "Asks a River-trained open Jev whether the page you just opened is a distraction from your stated task, and locks it if so.",
-  "permissions": ["tabs", "storage", "webNavigation"],
-  "host_permissions": ["http://127.0.0.1:8790/*"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html" },
-  "web_accessible_resources": [{ "resources": ["lock.html"], "matches": ["<all_urls>"] }]
+  "version": "0.2.0",
+  "description": "You decide what flows in. Your own model judges each page against the task you set, and learns from your overrides.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "tabs", "scripting", "history", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [{ "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle" }],
+  "action": {
+    "default_popup": "pages/popup.html",
+    "default_title": "Floodgate",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "options_page": "pages/dashboard.html",
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "commands": {
+    "toggle-pause": { "suggested_key": { "default": "Alt+Shift+P" }, "description": "Pause Floodgate for 15 minutes (press again to resume)" }
+  }
 }
