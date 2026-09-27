@@ -216,7 +216,8 @@ const freePort = async () => {
   check(gateLog.some((r) => r.kind === "override" && r.title?.includes("Minecraft")), "override reached the gate server (/override)");
 
   // 11. gate offline -> heuristic fallback, clearly labelled
-  await set({ providerSettings: { "floodgate-gate": { endpoint: "http://127.0.0.1:8799" } } });
+  const DEAD = `http://127.0.0.1:${await freePort()}`;
+  await set({ providerSettings: { "floodgate-gate": { endpoint: DEAD } } });
   await sleep(300);
   await page.goto(SITE("tube.fgtest", "Fortnite live stream highlights"));
   await sleep(2500);
@@ -246,6 +247,53 @@ const freePort = async () => {
   check(!(await ui()).block && /Chinat focus/.test(last3.reason), `their example applies to me: ${last3.reason}`);
   const s3 = await sw.evaluate(async () => (await chrome.storage.local.get("settings")).settings);
   check(s3.blockDomains.includes("netflix.com") && s3.allowDomains.includes("docs.river.ai"), "their rules were merged");
+
+  // 13. GBrain context provider against tools/mock_gbrain_mcp.py: settings show up, health works, corrections are remembered
+  const gbrainMock = spawn("python3", [path.join(EXT, "..", "tools", "mock_gbrain_mcp.py")], { stdio: "ignore" });
+  process.on("exit", () => gbrainMock.kill());
+  await sleep(800);
+  await set({ enrichers: { gbrain: true }, providerSettings: { "floodgate-gate": { endpoint: GATE }, gbrain: { endpoint: "http://127.0.0.1:8799/mcp", token: "test" } } });
+  await dash.goto(`chrome-extension://${id}/pages/dashboard.html#model`);
+  await sleep(800);
+  check((await dash.locator("#enrichers input[type=password]").count()) === 1, "GBrain token field is shown under Context providers");
+  await dash.locator("#enrichers button", { hasText: "Test connection" }).click();
+  await sleep(1200);
+  const gmsg = await dash.locator("#enrichers .msg").innerText();
+  check(/Connected.*search_memory.*remember/.test(gmsg), `GBrain health: ${gmsg}`);
+  await page.goto(SITE("tube.fgtest", "Minecraft speedrun any percent"));
+  await sleep(3500);
+  await press(/It's on task/);
+  await sleep(1500);
+  const recall = await fetch("http://127.0.0.1:8799/mcp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer t" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_memory", arguments: { query: "x" } } }),
+  }).then((r) => r.text());
+  check(/Floodgate correction.*Minecraft speedrun any percent.*ON TASK/.test(recall), "override was remembered in GBrain (onLabel)");
+  const lastG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).find((e) => /Minecraft speedrun any/.test(e.title));
+  check(lastG && !lastG.providerError, "decision still works with GBrain enrichment on");
+  await set({ enrichers: {} });
+
+  // 14. Optional: the real gate server (e.g. an ngrok URL):  FLOODGATE_GATE=https://… npm run e2e
+  if (process.env.FLOODGATE_GATE) {
+    const REAL = process.env.FLOODGATE_GATE.replace(/\/+$/, "");
+    await set({ provider: "floodgate-gate", mode: "focus", task: "build the Floodgate hackathon demo", providerSettings: { "floodgate-gate": { endpoint: REAL, timeoutMs: 30000 } } });
+    await dash.goto(`chrome-extension://${id}/pages/dashboard.html#model`);
+    await sleep(600);
+    await dash.locator("#providers .provider.on button", { hasText: "Test connection" }).click();
+    await sleep(4000);
+    console.log(`REAL gate health: ${await dash.locator("#providers .provider.on .msg").innerText()}`);
+    for (const title of ["Chrome extension Manifest V3 service worker docs", "Funny cat compilation 2026", "xkcd: Standards"]) {
+      await page.goto(SITE("real.fgtest", title));
+      await sleep(15000);
+      const e = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
+      console.log(`REAL ${e.action.padEnd(5)} p=${e.p} ${e.ms} ms  ${title}  [${e.source}]`);
+      check(!e.providerError, `real gate answered for "${title}"${e.providerError ? `: ${e.providerError}` : ""}`);
+    }
+    await set({ mode: "break" });
+    await sleep(1500);
+    check(!(await ui()).block, "real gate: Break mode unblocks");
+  }
 
   console.log(errors.length ? `ERRORS:\n${errors.join("\n")}` : "no console errors");
   console.log(`screenshots: ${TMP}`);
