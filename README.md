@@ -181,6 +181,17 @@ python -m floodgate.gate_server --task "finish the hackathon demo" --run data/ru
 
 Then open `chrome://extensions`, enable Developer mode, and **Load unpacked** the `extension/` folder. Set your task from the extension popup.
 
+## Personal memory with GBrain
+
+Each person has a separate second brain for their goals, projects, friends, and
+commitments. Floodgate follows those connections and gives relevant evidence to
+the decision model. Corrections are remembered for the specific task and page.
+
+The local demo shows a three-step friend connection and a promise that makes a
+resource relevant. It uses real GBrain storage with fictional profiles and needs
+no River key. See [setup and commands](docs/GBRAIN_INTEGRATION_PLAN.md) and the
+[90-second hackathon script](docs/HACKATHON_DEMO.md).
+
 ## Layout
 
 | Path | What |

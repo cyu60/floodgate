@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Floodgate — Personal memory</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #262623;
+      background: #f6f6f3;
+      font-synthesis: none;
+      --ink: #262623;
+      --muted: #6b6b68;
+      --line: #e7e7e4;
+      --accent: #365edc;
+      --accent-soft: #eef2ff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; -webkit-font-smoothing: antialiased; }
+    button, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 3px solid #93abfc;
+      outline-offset: 4px;
+    }
+    button:disabled { cursor: default; }
+    svg { display: block; }
+    .app-header {
+      height: 70px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfbf9;
+    }
+    .header-inner {
+      max-width: 1200px;
+      height: 100%;
+      padding: 0 28px;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand-group, .brand, .header-controls { display: flex; align-items: center; }
+    .brand { gap: 10px; font-size: 18px; font-weight: 650; letter-spacing: -.65px; }
+    .brand-mark { width: 30px; height: 30px; color: #363633; }
+    .header-divider { height: 19px; width: 1px; background: #ddddda; margin: 0 20px; }
+    .workspace-name { color: #6b6b68; font-size: 13px; }
+    .header-controls { gap: 20px; }
+    .demo-label { font-size: 10px; font-weight: 650; letter-spacing: 1.15px; color: #6b6b68; }
+    .owner-switch { display: flex; padding: 4px; border-radius: 100px; background: #eeeeeb; gap: 2px; }
+    .owner-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 13px 5px 5px;
+      border: 1px solid transparent;
+      border-radius: 100px;
+      background: transparent;
+      color: #6b6b68;
+      font-size: 12px;
+      font-weight: 550;
+      transition: background .18s, box-shadow .18s, color .18s;
+    }
+    .owner-button[aria-pressed="true"] { color: #292926; background: #fff; border-color: #e3e3e0; box-shadow: 0 1px 3px #262b1910; }
+    .avatar {
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      border-radius: 50%;
+      color: #62625f;
+      background: #e5e5e2;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .avatar.bob { color: #755f4d; background: #eee3d8; }
+    main { max-width: 1200px; padding: 26px 28px 0; margin: auto; }
+    .intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .eyebrow { color: #6b6b68; font-size: 10px; font-weight: 650; letter-spacing: 1.4px; margin: 0 0 9px; }
+    h1 { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 600; letter-spacing: -1.15px; }
+    .intro-copy { margin: 8px 0 0; color: #6b6b68; font-size: 13px; line-height: 1.6; }
+    .private-note { display: flex; align-items: center; gap: 7px; color: #6b6b68; font-size: 11px; white-space: nowrap; }
+    .private-note svg { width: 14px; height: 14px; }
+    .scenarios {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 5px;
+      gap: 5px;
+      margin: 21px 0 15px;
+      border: 1px solid #e7e7e4;
+      background: #eeeeeb;
+      border-radius: 13px;
+    }
+    .scenario {
+      padding: 13px 16px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      text-align: left;
+      gap: 12px;
+      transition: background .18s, box-shadow .18s;
+    }
+    .scenario:hover { background: #f7f7f4; }
+    .scenario[aria-selected="true"] { background: #fff; border-color: #e0e0dd; box-shadow: 0 2px 5px #272c1710; }
+    .scenario-number { color: #6b6b68; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .scenario[aria-selected="true"] .scenario-number { color: var(--accent); }
+    .scenario-title { display: block; color: #575754; font-size: 12px; font-weight: 550; }
+    .scenario[aria-selected="true"] .scenario-title { color: #2b2b28; }
+    .scenario-description { display: block; color: #6b6b68; font-size: 10px; margin-top: 4px; }
+    .scenario-arrow { margin-left: auto; color: #6b6b68; font-size: 15px; opacity: 0; }
+    .scenario[aria-selected="true"] .scenario-arrow { opacity: 1; color: var(--accent); }
+    .task-strip {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      margin: 0 0 14px;
+      min-height: 51px;
+      padding: 0 2px;
+    }
+    .task-icon { width: 35px; height: 35px; display: grid; place-items: center; border: 1px solid #e1e1de; border-radius: 10px; color: #6b6b68; background: #f0f0ed; }
+    .task-icon svg { width: 18px; height: 18px; }
+    .task-label { color: #6b6b68; font-size: 9px; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+    .task-title { font-size: 13px; font-weight: 550; color: #4a4a47; }
+    .page-context { margin-left: auto; display: flex; align-items: center; gap: 9px; color: #6b6b68; font-size: 11px; }
+    .page-context svg { width: 14px; height: 14px; }
+    .page-context strong { color: #60605d; font-weight: 500; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 295px; gap: 17px; }
+    .graph-panel, .inspector { background: #fff; border: 1px solid #e2e2df; border-radius: 15px; overflow: hidden; }
+    .graph-panel { min-height: 369px; display: flex; flex-direction: column; }
+    .graph-header { padding: 22px 25px 0; display: flex; align-items: flex-start; gap: 18px; justify-content: space-between; }
+    .section-label { margin: 0 0 9px; color: #6b6b68; font-size: 9px; font-weight: 650; letter-spacing: 1.2px; }
+    h2 { font-size: 17px; font-weight: 550; line-height: 1.4; letter-spacing: -.45px; margin: 0; }
+    .path-count { flex-shrink: 0; border: 1px solid #e8e8e5; border-radius: 100px; font-size: 10px; color: #6b6b68; padding: 5px 9px; margin-top: 19px; white-space: nowrap; }
+    .graph-scroll { position: relative; overflow-x: auto; margin-top: 6px; flex: 1; }
+    .graph {
+      position: relative;
+      min-width: 540px;
+      height: 234px;
+      background-image: radial-gradient(#dededb .7px, transparent .7px);
+      background-size: 18px 18px;
+      background-position: 7px 9px;
+      isolation: isolate;
+    }
+    .graph::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(#fff 0, transparent 20%, transparent 75%, #fff 100%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .graph-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .graph-node {
+      position: absolute;
+      top: 54px;
+      width: 137px;
+      min-height: 140px;
+      padding: 12px 5px 10px;
+      transform: translateX(-50%);
+      border: 1px solid transparent;
+      border-radius: 14px;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: background .16s, border-color .16s;
+    }
+    .graph-node:hover { background: #f7f7f4e8; }
+    .graph-node[aria-pressed="true"] { background: linear-gradient(to bottom, transparent 0 58px, #f5f7fe 58px 100%); border-color: transparent; }
+    .node-icon {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+      border: 1px solid #dededb;
+      border-radius: 50%;
+      background: #fff;
+      color: #6b6b68;
+      box-shadow: 0 2px 4px #252d1510;
+    }
+    .node-icon svg { width: 19px; height: 19px; }
+    .node-icon.person { background: #f1f1ee; color: #6b6b68; font-size: 15px; font-weight: 500; }
+    .graph-node[aria-pressed="true"] .node-icon { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 5px #365edc25; }
+    .node-title { font-size: 12px; font-weight: 550; line-height: 1.4; max-width: 127px; color: #3f3f3c; min-height: 30px; display: flex; align-items: center; text-align: center; }
+    .graph-node[aria-pressed="true"] .node-title { color: #3c59a6; }
+    .node-kind { margin-top: 5px; color: #6b6b68; font-size: 9px; font-weight: 500; letter-spacing: .9px; text-transform: uppercase; }
+    .edge-label { font-size: 10px; fill: #6b6b68; paint-order: stroke; stroke: #fff; stroke-width: 5px; stroke-linejoin: round; }
+    .graph-footer { border-top: 1px solid #ededea; min-height: 48px; padding: 12px 24px; display: flex; align-items: center; gap: 10px; color: #6b6b68; font-size: 10px; line-height: 1.5; background: #fdfdfa; }
+    .graph-footer svg { width: 14px; height: 14px; flex-shrink: 0; color: #6b6b68; }
+    .graph-footer strong { color: #5b5b58; font-weight: 550; }
+    .path-picker { display: flex; gap: 6px; padding: 0 24px 12px; flex-wrap: wrap; }
+    .path-picker:empty { display: none; }
+    .path-option { border: 1px solid #e7e7e4; background: #fafaf7; border-radius: 100px; padding: 5px 10px; color: #6b6b68; font-size: 10px; }
+    .path-option[aria-pressed="true"] { color: #3f60be; border-color: #dce4fc; background: #f0f4ff; }
+    .inspector { display: flex; flex-direction: column; height: 369px; }
+    .inspector-header { padding: 22px 22px 0; display: flex; align-items: center; justify-content: space-between; }
+    .inspector-header .section-label { margin: 0; }
+    .inspector-hint { color: #6b6b68; font-size: 9px; }
+    .inspector-body { padding: 22px; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: #dededb transparent; }
+    .detail-kind { display: inline-flex; align-items: center; gap: 6px; color: #6b6b68; font-size: 9px; font-weight: 500; letter-spacing: .6px; text-transform: uppercase; }
+    .detail-kind svg { width: 13px; height: 13px; }
+    .detail-title { margin: 10px 0 10px; color: #32322f; font-size: 22px; letter-spacing: -.75px; font-weight: 550; line-height: 1.2; }
+    .detail-body { color: #6a6a67; font-size: 12px; line-height: 1.8; margin: 0; }
+    .detail-divider { height: 1px; background: #ededea; margin: 20px 0 17px; }
+    .detail-label { color: #6b6b68; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; margin: 0 0 9px; }
+    .detail-owner { display: flex; gap: 8px; align-items: center; color: #6b6b68; font-size: 10px; }
+    .detail-owner .avatar { width: 20px; height: 20px; font-size: 9px; }
+    .source-list { margin-top: 17px; }
+    .source-item { padding: 8px 0; border-bottom: 1px solid #f0f0ed; }
+    .source-item:last-child { border: 0; }
+    .source-connection { color: #676764; font-size: 11px; line-height: 1.5; }
+    .source-text { color: #6b6b68; font-size: 10px; line-height: 1.6; margin-top: 4px; }
+    .inspector-empty { color: #6b6b68; font-size: 12px; line-height: 1.8; padding: 25px 0; }
+    .context-bar { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 16px 2px 0; font-size: 10px; color: #6b6b68; min-height: 20px; }
+    .status { display: flex; gap: 7px; align-items: center; }
+    .status-dot { width: 5px; height: 5px; background: #a0a09d; border-radius: 50%; flex-shrink: 0; }
+    .status[data-state="loading"] .status-dot { background: #a5afd0; animation: breathe 1s ease-in-out infinite; }
+    .status[data-state="error"] .status-dot { background: #c0856b; }
+    .context-bar button { font-size: 10px; background: transparent; border: 0; padding: 2px 0; color: #6b6b68; text-decoration: underline; text-underline-offset: 3px; }
+    .retry { border: 1px solid #ddddda; background: #fff; padding: 8px 14px; border-radius: 8px; font-size: 11px; color: #6b6b68; margin-top: 15px; }
+    .state-panel { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; text-align: center; background: #fff; }
+    .state-symbol { width: 43px; height: 43px; border-radius: 50%; display: grid; place-items: center; color: #6b6b68; background: #f4f4f1; margin-bottom: 14px; }
+    .state-symbol svg { width: 20px; height: 20px; }
+    .state-title { font-size: 14px; font-weight: 500; color: #60605d; margin: 0 0 7px; }
+    .state-description { margin: 0; max-width: 305px; font-size: 11px; line-height: 1.7; color: #6b6b68; }
+    .loading-chain { display: flex; align-items: center; margin-bottom: 23px; }
+    .loading-node { width: 35px; height: 35px; background: #f0f0ed; border: 1px solid #e7e7e4; border-radius: 50%; animation: breathe 1.2s ease-in-out infinite; }
+    .loading-node:nth-of-type(3) { animation-delay: .2s; }
+    .loading-node:nth-of-type(5) { animation-delay: .4s; }
+    .loading-line { width: 54px; height: 1px; background: #e9e9e6; }
+    .bottom-section { margin-top: 24px; border-top: 1px solid #e5e5e2; padding-top: 19px; }
+    .memory-summary { cursor: pointer; color: #6b6b68; font-size: 11px; font-weight: 500; }
+    .memory-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 20px 0; }
+    .memory-item { padding-right: 20px; border-right: 1px solid #e7e7e4; }
+    .memory-item:last-child { border: 0; }
+    .memory-item h3 { margin: 5px 0; font-size: 12px; font-weight: 550; color: #6b6b68; }
+    .memory-item p { font-size: 11px; line-height: 1.7; color: #6b6b68; margin: 0; }
+    .memory-item span { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #6b6b68; }
+    .raw-details { margin-top: 18px; }
+    .raw-details summary { cursor: pointer; color: #6b6b68; font-size: 10px; }
+    pre { background: #fff; border: 1px solid #e6e6e3; border-radius: 10px; padding: 18px; font-size: 10px; line-height: 1.6; max-height: 350px; overflow: auto; white-space: pre-wrap; color: #6b6b68; }
+    footer { max-width: 1200px; margin: 0 auto; padding: 20px 30px 25px; color: #6b6b68; font-size: 10px; line-height: 1.7; }
+    .appear { animation: appear .22s ease-out; }
+    [hidden] { display: none !important; }
+    @keyframes breathe { 50% { opacity: .4; } }
+    @keyframes appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @media (min-width: 1450px) { main { padding-top: 32px; } .graph-panel { min-height: 406px; } .inspector { height: 406px; } .graph { height: 270px; } }
+    @media (max-width: 1000px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 260px; gap: 13px; }
+      .graph-header { padding: 20px 20px 0; }
+      .graph { min-width: 470px; }
+      .graph-node { width: 118px; }
+      .node-title { max-width: 109px; }
+      .scenario-description { display: none; }
+      .header-controls { gap: 12px; }
+      .page-context { max-width: 250px; }
+    }
+    @media (max-width: 800px) {
+      .workspace { grid-template-columns: minmax(0, 1fr); }
+      .inspector { height: auto; min-height: 270px; }
+      .inspector-body { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-height: none; }
+      .detail-divider { display: none; }
+      .detail-meta { border-left: 1px solid var(--line); padding-left: 20px; }
+      .workspace-name, .header-divider, .demo-label { display: none; }
+      .private-note { display: none; }
+      .scenario { padding: 12px 10px; gap: 8px; }
+      .scenario-arrow { display: none; }
+      .page-context { display: none; }
+      .memory-list { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .app-header { height: 68px; }
+      .header-inner { padding: 0 16px; }
+      .brand { font-size: 16px; gap: 7px; }
+      .brand-mark { width: 27px; height: 27px; }
+      .owner-button { padding-right: 9px; gap: 5px; }
+      main { padding: 27px 15px 0; }
+      h1 { font-size: 27px; }
+      .intro-copy { font-size: 12px; }
+      .scenarios { margin-top: 23px; gap: 2px; }
+      .scenario { padding: 10px 7px; display: block; }
+      .scenario-number { display: block; margin-bottom: 6px; }
+      .scenario-title { font-size: 10px; line-height: 1.4; }
+      h2 { font-size: 16px; }
+      .graph-header { gap: 8px; }
+      .path-count { font-size: 9px; padding: 4px 6px; }
+      .graph { min-width: 490px; }
+      .inspector-body { grid-template-columns: 1fr; }
+      .detail-meta { border: 0; padding: 0; }
+      .context-bar { align-items: flex-start; font-size: 9px; }
+      .memory-list { grid-template-columns: 1fr; }
+      .memory-item { border: 0; padding: 0; }
+      footer { padding-left: 17px; padding-right: 17px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-group">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><path d="M9 10h14M9 16h10M9 22h6" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          Floodgate
+        </div>
+        <span class="header-divider"></span><span class="workspace-name">Personal memory</span>
+      </div>
+      <div class="header-controls">
+        <span class="demo-label">LOCAL DEMO</span>
+        <div class="owner-switch" role="group" aria-label="Choose a person's second brain">
+          <button class="owner-button" data-owner="alice" aria-pressed="true"><span class="avatar" aria-hidden="true">A</span>Alice</button>
+          <button class="owner-button" data-owner="bob" aria-pressed="false"><span class="avatar bob" aria-hidden="true">B</span>Bob</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">A SECOND BRAIN, ALL YOUR OWN</p>
+        <h1>Good context changes everything.</h1>
+        <p class="intro-copy">The people, projects, and promises behind what matters to you.</p>
+      </div>
+      <div class="private-note">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m10 2 6 2.5v4.8c0 3.4-2.3 6-6 8.7-3.7-2.7-6-5.3-6-8.7V4.5L10 2Z" stroke="currentColor" stroke-width="1.3"/><path d="m7 9.5 2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="private-note">Only Alice’s memories</span>
+      </div>
+    </section>
+    <nav class="scenarios" role="tablist" aria-label="Explore a memory scenario">
+      <button class="scenario" role="tab" id="tab-warm-intro" data-scenario="warm-intro" aria-selected="true" aria-controls="scenario-content" tabindex="0">
+        <span class="scenario-number">01</span><span><span class="scenario-title">Find the right person</span><span class="scenario-description">A connection you would have missed</span></span><span class="scenario-arrow" aria-hidden="true">↗</span>
+      </button>
+      <button class="scenario" role="tab" id="tab-promise" data-scenario="promise" aria-selected="false" aria-controls="scenario-content" tabindex="-1">
+        <span class="scenario-number">02</span><span><span class="scenario-title">Keep a promise</span><span class="scenario-description">Remember what a commitment needs</span></span><span class="scenario-arrow" aria-hidden="true">↗</span>
+      </button>
+      <button class="scenario" role="tab" id="tab-different-person" data-scenario="different-person" aria-selected="false" aria-controls="scenario-content" tabindex="-1">
+        <span class="scenario-number">03</span><span><span class="scenario-title">Same page. Different person.</span><span class="scenario-description">Your context makes the difference</span></span><span class="scenario-arrow" aria-hidden="true">↗</span>
+      </button>
+    </nav>
+    <div id="scenario-content" role="tabpanel" aria-labelledby="tab-warm-intro">
+      <div class="task-strip">
+        <span class="task-icon" id="task-icon" aria-hidden="true"></span>
+        <div><div class="task-label" id="task-label">ALICE’S CURRENT TASK</div><div class="task-title" id="task">Loading current task…</div></div>
+        <div class="page-context"><span id="page-icon" aria-hidden="true"></span><span>Considering <strong id="page-name">a saved resource</strong></span></div>
+      </div>
+      <div class="workspace">
+        <section class="graph-panel" aria-labelledby="question">
+          <div class="graph-header">
+            <div><p class="section-label">FOLLOW THE CONNECTION</p><h2 id="question">Who can help me move forward?</h2></div>
+            <span class="path-count" id="path-count">Personal context</span>
+          </div>
+          <div class="graph-scroll"><div class="graph" id="graph" role="group" aria-label="Connected memories. Select a memory to inspect its source."></div></div>
+          <div class="path-picker" id="path-picker" role="group" aria-label="Choose a relationship path"></div>
+          <div class="graph-footer"><span id="footer-icon" aria-hidden="true"></span><span id="connection-note">Finding the context behind this page.</span></div>
+        </section>
+        <aside class="inspector" aria-labelledby="inspector-label">
+          <div class="inspector-header"><h2 class="section-label" id="inspector-label">MEMORY DETAILS</h2><span class="inspector-hint">Select a node</span></div>
+          <div class="inspector-body" id="inspector"></div>
+        </aside>
+      </div>
+      <div class="context-bar">
+        <div class="status" id="status" role="status" data-state="loading"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Reading Alice’s second brain…</span></div>
+        <span id="context-count"></span>
+      </div>
+      <section class="bottom-section" aria-label="Additional evidence">
+        <details id="memories-details"><summary class="memory-summary" id="memories-summary">All retrieved memories</summary><div class="memory-list" id="memory-list"></div></details>
+        <details class="raw-details" id="raw-details"><summary>Inspect the underlying data</summary><pre id="raw">No context loaded.</pre></details>
+      </section>
+    </div>
+  </main>
+  <footer>Fictional people. Real GBrain retrieval. This is the evidence an agent can use, not a generated answer or an attention score. Friendship never opens another person’s brain.</footer>
+  <script>
+    const $ = id => document.getElementById(id);
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const ICONS = {
+      project: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h6M8 17h3"/>',
+      resource: '<path d="M6 4h12v17l-6-4-6 4V4Z"/><path d="M9 8h6M9 11h4"/>',
+      commitment: '<circle cx="12" cy="12" r="8"/><path d="m8 12 3 3 5-6"/>',
+      constraint: '<path d="M5 7h14M5 17h14M8 4v6M16 14v6"/>',
+      person: '<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>',
+      link: '<path d="m9 15 6-6M8 13l-1 1a3.5 3.5 0 0 0 5 5l3-3M16 11l1-1a3.5 3.5 0 0 0-5-5L9 8"/>',
+      search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
+    };
+    const SCENARIO_LABELS = {
+      'warm-intro': { question: 'Who can help me ship the Atlas offline demo?', task: 'Ship the Atlas offline demo', page: 'Quiet Harbor' },
+      'promise': { question: 'What should I read to keep my promise to Bob?', task: 'Keep the Friday handoff promise', page: 'Pocket Vault' },
+      'different-person': { question: 'Does Quiet Harbor help my current work?', task: '', page: 'Quiet Harbor' },
+    };
+    let owner = 'alice';
+    let scenario = 'warm-intro';
+    let requestVersion = 0;
+    let controller;
+    let data = null;
+    let paths = [];
+    let selectedPath = 0;
+    let selectedSlug = null;
+    let nodeMap = new Map();
+
+    function el(tag, text = '', className = '') {
+      const node = document.createElement(tag);
+      node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+    function svgElement(tag, attributes = {}) {
+      const node = document.createElementNS(SVG_NS, tag);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+      return node;
+    }
+    function icon(name) {
+      const svg = svgElement('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.4', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+      // Only these fixed local icon definitions are inserted as markup.
+      svg.innerHTML = ICONS[name] || ICONS.project;
+      return svg;
+    }
+    function ownerName() { return owner === 'alice' ? 'Alice' : 'Bob'; }
+    function kindName(kind) {
+      return ({ person: 'Person', project: 'Project', resource: 'Saved resource', commitment: 'Promise', constraint: 'Requirement', correction: 'Your correction', preference: 'Preference', task: 'Task' })[kind] || 'Memory';
+    }
+    function relationName(relation) { return String(relation || 'connected to').replaceAll('_', ' '); }
+    function titleFor(slug) { return nodeMap.get(slug)?.title || 'Connected memory'; }
+    function setStatus(text, state = 'ready') {
+      $('status').dataset.state = state;
+      $('status-text').textContent = text;
+    }
+    function currentTask() {
+      if (scenario === 'different-person') return owner === 'alice' ? 'Ship the Atlas offline demo' : 'Prepare the Cedar launch pitch';
+      return SCENARIO_LABELS[scenario].task;
+    }
+    function syncControls() {
+      document.querySelectorAll('[data-owner]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.owner === owner));
+      });
+      document.querySelectorAll('[data-scenario]').forEach(button => {
+        const active = button.dataset.scenario === scenario;
+        button.setAttribute('aria-selected', String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      $('scenario-content').setAttribute('aria-labelledby', `tab-${scenario}`);
+      $('private-note').textContent = `Only ${ownerName()}’s memories`;
+      $('task-label').textContent = `${ownerName().toUpperCase()}’S CURRENT TASK`;
+      $('task').textContent = currentTask();
+      $('question').textContent = SCENARIO_LABELS[scenario].question;
+      $('page-name').textContent = SCENARIO_LABELS[scenario].page;
+    }
+    function clearContext() {
+      data = null;
+      paths = [];
+      nodeMap.clear();
+      selectedSlug = null;
+      $('graph').replaceChildren();
+      $('path-picker').replaceChildren();
+      $('inspector').replaceChildren(el('p', `${ownerName()}’s memories will appear here.`, 'inspector-empty'));
+      $('memory-list').replaceChildren();
+      $('context-count').textContent = '';
+      $('path-count').textContent = 'Personal context';
+      $('connection-note').textContent = `Looking only in ${ownerName()}’s second brain.`;
+      $('raw').textContent = 'No context loaded.';
+      $('memories-summary').textContent = 'All retrieved memories';
+      $('scenario-content').setAttribute('aria-busy', 'true');
+    }
+    function statePanel(title, description, loading = false, retry = false) {
+      const panel = el('div', '', 'state-panel');
+      if (loading) {
+        const chain = el('div', '', 'loading-chain');
+        chain.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < 5; i++) chain.append(el('span', '', i % 2 ? 'loading-line' : 'loading-node'));
+        panel.append(chain);
+      } else {
+        const symbol = el('span', '', 'state-symbol');
+        symbol.append(icon('search'));
+        panel.append(symbol);
+      }
+      panel.append(el('p', title, 'state-title'), el('p', description, 'state-description'));
+      if (retry) {
+        const button = el('button', 'Try again', 'retry');
+        button.onclick = load;
+        panel.append(button);
+      }
+      $('graph').replaceChildren(panel);
+    }
+    function choosePaths(context) {
+      const resources = new Set((context.evidence || []).filter(item => item.kind === 'resource').map(item => item.slug));
+      const sorted = [...(context.paths || [])].filter(path => Array.isArray(path.slugs) && path.slugs.length > 1)
+        .sort((a, b) => (b.edges || []).length - (a.edges || []).length);
+      const toResources = sorted.filter(path => resources.has(path.slugs.at(-1)));
+      const seen = new Set();
+      return (toResources.length ? toResources : sorted).filter(path => {
+        const target = path.slugs.at(-1);
+        if (seen.has(target)) return false;
+        seen.add(target);
+        return true;
+      }).slice(0, 3);
+    }
+    function selectNode(slug, focus = false) {
+      selectedSlug = slug;
+      document.querySelectorAll('.graph-node').forEach(button => {
+        const active = button.dataset.slug === slug;
+        button.setAttribute('aria-pressed', String(active));
+        if (active && focus) button.focus();
+      });
+      renderInspector();
+    }
+    function renderGraph() {
+      if (!data || !paths.length) return;
+      const graph = $('graph');
+      const path = paths[selectedPath];
+      const slugs = path.slugs;
+      graph.style.minWidth = `${Math.max(470, slugs.length * 136)}px`;
+      const width = graph.clientWidth;
+      const height = graph.clientHeight;
+      const step = Math.min(181, (width - 136) / Math.max(1, slugs.length - 1));
+      const first = (width - step * (slugs.length - 1)) / 2;
+      const positions = new Map(slugs.map((slug, index) => [slug, first + index * step]));
+      const svg = svgElement('svg', { viewBox: `0 0 ${width} ${height}`, class: 'graph-lines', 'aria-hidden': 'true' });
+      const definitions = svgElement('defs');
+      const marker = svgElement('marker', { id: 'relationship-arrow', markerWidth: '6', markerHeight: '6', refX: '5', refY: '3', orient: 'auto', markerUnits: 'strokeWidth' });
+      marker.append(svgElement('path', { d: 'M1 1 5 3 1 5', fill: 'none', stroke: '#aaaaa7', 'stroke-width': '1.1', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      definitions.append(marker);
+      svg.append(definitions);
+      const centerY = 89;
+      for (const edge of path.edges || []) {
+        const from = positions.get(edge.from);
+        const to = positions.get(edge.to);
+        if (from === undefined || to === undefined) continue;
+        const direction = to > from ? 1 : -1;
+        svg.append(svgElement('path', { d: `M${from + 29 * direction} ${centerY} L${to - 31 * direction} ${centerY}`, stroke: '#c3c3c0', 'stroke-width': '1.2', fill: 'none', 'marker-end': 'url(#relationship-arrow)' }));
+        const label = svgElement('text', { x: (from + to) / 2, y: centerY - 14, 'text-anchor': 'middle', class: 'edge-label' });
+        label.textContent = relationName(edge.relation);
+        svg.append(label);
+      }
+      graph.replaceChildren(svg);
+      slugs.forEach((slug, index) => {
+        const memory = nodeMap.get(slug) || { title: 'Connected memory', kind: 'memory' };
+        const button = el('button', '', 'graph-node');
+        button.style.left = `${positions.get(slug)}px`;
+        button.dataset.slug = slug;
+        button.setAttribute('aria-label', `${memory.title}. ${kindName(memory.kind)}. Show memory and source.`);
+        button.setAttribute('aria-pressed', String(slug === selectedSlug));
+        const symbol = el('span', '', `node-icon ${memory.kind === 'person' ? 'person' : ''}`);
+        symbol.setAttribute('aria-hidden', 'true');
+        if (memory.kind === 'person') symbol.textContent = memory.title.charAt(0).toUpperCase();
+        else symbol.append(icon(memory.kind));
+        button.append(symbol, el('span', memory.title, 'node-title'), el('span', kindName(memory.kind), 'node-kind'));
+        button.onclick = () => selectNode(slug);
+        button.onkeydown = event => {
+          let next = index;
+          if (event.key === 'ArrowRight') next = Math.min(index + 1, slugs.length - 1);
+          else if (event.key === 'ArrowLeft') next = Math.max(index - 1, 0);
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = slugs.length - 1;
+          else return;
+          event.preventDefault();
+          selectNode(slugs[next], true);
+        };
+        graph.append(button);
+      });
+      const count = (path.edges || []).length;
+      $('path-count').textContent = `${count} ${count === 1 ? 'connection' : 'connections'}`;
+      $('connection-note').replaceChildren(el('strong', titleFor(slugs[0])), document.createTextNode(` reaches ${titleFor(slugs.at(-1))} through ${count} saved ${count === 1 ? 'relationship' : 'relationships'}.`));
+      if (scenario === 'different-person' && !hasConsideredResource()) {
+        $('connection-note').textContent = `${SCENARIO_LABELS[scenario].page} isn’t in ${ownerName()}’s retrieved context. These are their own connections.`;
+      }
+      renderInspector();
+    }
+    function hasConsideredResource() {
+      return data.context.evidence.some(item => item.metadata?.url === data.scenario.url);
+    }
+    function renderInspector() {
+      const container = $('inspector');
+      const memory = nodeMap.get(selectedSlug);
+      if (!memory) return;
+      const primary = el('div', '', 'detail-primary appear');
+      const kind = el('span', '', 'detail-kind');
+      kind.append(icon(memory.kind), document.createTextNode(kindName(memory.kind)));
+      primary.append(kind, el('h3', memory.title, 'detail-title'), el('p', memory.body || 'This memory is connected by the saved relationships below.', 'detail-body'));
+      const meta = el('div', '', 'detail-meta appear');
+      meta.append(el('div', '', 'detail-divider'), el('p', 'SAVED IN', 'detail-label'));
+      const ownerLine = el('div', '', 'detail-owner');
+      ownerLine.append(el('span', ownerName().charAt(0), `avatar ${owner}`), document.createTextNode(`${ownerName()}’s second brain`));
+      meta.append(ownerLine);
+      const sourceList = el('div', '', 'source-list');
+      sourceList.append(el('p', 'HOW WE KNOW', 'detail-label'));
+      const edges = (paths[selectedPath]?.edges || []).filter(edge => edge.from === selectedSlug || edge.to === selectedSlug);
+      for (const edge of edges) {
+        const item = el('div', '', 'source-item');
+        item.append(el('div', `${titleFor(edge.from)} → ${titleFor(edge.to)}`, 'source-connection'));
+        item.append(el('div', `${relationName(edge.relation)} · ${edge.provenance || 'Saved relationship'}`, 'source-text'));
+        sourceList.append(item);
+      }
+      if (!edges.length) {
+        sourceList.append(el('div', memory.metadata?.provenance || 'Saved in this person’s brain.', 'source-text'));
+      }
+      meta.append(sourceList);
+      container.replaceChildren(primary, meta);
+    }
+    function renderPathPicker() {
+      const picker = $('path-picker');
+      picker.replaceChildren();
+      if (paths.length < 2) return;
+      paths.forEach((path, index) => {
+        const button = el('button', titleFor(path.slugs.at(-1)), 'path-option');
+        button.setAttribute('aria-pressed', String(index === selectedPath));
+        button.onclick = () => {
+          selectedPath = index;
+          selectedSlug = path.slugs.at(-1);
+          renderPathPicker();
+          renderGraph();
+        };
+        picker.append(button);
+      });
+    }
+    function renderMemories(evidence) {
+      const list = $('memory-list');
+      list.replaceChildren();
+      for (const memory of evidence) {
+        const item = el('article', '', 'memory-item');
+        item.append(el('span', kindName(memory.kind)), el('h3', memory.title), el('p', memory.body || 'Saved memory'));
+        list.append(item);
+      }
+      $('memories-summary').textContent = `All retrieved memories${evidence.length ? ` · ${evidence.length}` : ''}`;
+      if (!evidence.length) list.append(el('p', 'No memories matched this task in this person’s brain.', 'detail-body'));
+    }
+    function render(result) {
+      data = result;
+      const context = data.context;
+      const evidence = context.evidence || [];
+      for (const path of context.paths || []) {
+        (path.slugs || []).forEach((slug, index) => {
+          nodeMap.set(slug, { slug, title: path.titles?.[index] || 'Connected memory', kind: 'memory', ...(path.nodes?.[index] || {}) });
+        });
+      }
+      // Evidence contains the fullest saved page, including its attribution.
+      for (const memory of evidence) nodeMap.set(memory.slug, { ...nodeMap.get(memory.slug), ...memory });
+      paths = choosePaths(context);
+      selectedPath = 0;
+      selectedSlug = paths[0]?.slugs.at(-1) || evidence[0]?.slug || null;
+      $('task').textContent = data.scenario.task;
+      $('question').textContent = data.scenario.question;
+      $('raw').textContent = JSON.stringify(data, null, 2);
+      renderPathPicker();
+      if (paths.length) renderGraph();
+      else if (evidence.length) {
+        statePanel('A memory, without a relationship path.', 'The saved evidence is available to inspect. There is no connected chain for this task.');
+        $('path-count').textContent = 'No linked path';
+        $('connection-note').textContent = 'Only retrieved memories appear here. No relationship has been inferred.';
+        renderInspector();
+      } else {
+        statePanel(`No connection in ${ownerName()}’s brain.`, 'No saved memories match this task. Choose another scenario or switch people to explore their own context.');
+        $('path-count').textContent = 'No matching path';
+        $('connection-note').textContent = `${ownerName()}’s brain is separate. Another person’s memories aren’t searched.`;
+        $('inspector').replaceChildren(el('p', 'No memory selected. Connections will appear when this person has evidence for the task.', 'inspector-empty'));
+      }
+      renderMemories(evidence);
+      const count = (context.paths || []).length;
+      $('context-count').textContent = `${evidence.length} memories · ${count} ${count === 1 ? 'path' : 'paths'}`;
+      setStatus(`Retrieved from ${ownerName()}’s GBrain${context.truncated ? ' · partial context' : ''}`);
+      $('scenario-content').setAttribute('aria-busy', 'false');
+    }
+    async function load() {
+      const version = ++requestVersion;
+      controller?.abort();
+      controller = new AbortController();
+      const activeController = controller;
+      syncControls();
+      clearContext();
+      setStatus(`Reading ${ownerName()}’s second brain…`, 'loading');
+      statePanel('Following the connections…', `Reading the projects, people, and promises saved in ${ownerName()}’s brain.`, true);
+      const timeout = setTimeout(() => activeController.abort(), 30000);
+      try {
+        const response = await fetch(`/api/context?${new URLSearchParams({ owner, scenario })}`, { signal: activeController.signal });
+        if (!response.ok) throw new Error('unavailable');
+        const result = await response.json();
+        if (version !== requestVersion) return;
+        if (result.owner !== owner || !result.context || result.context.owner_id !== owner) throw new Error('owner mismatch');
+        render(result);
+      } catch (error) {
+        if (version !== requestVersion) return;
+        setStatus('The connection to this brain is unavailable.', 'error');
+        statePanel('Let’s reconnect your context.', 'The local memory service didn’t respond. Check the demo terminal, then try again.', false, true);
+        $('inspector').replaceChildren(el('p', 'No saved context is shown while the connection is unavailable.', 'inspector-empty'));
+        $('connection-note').textContent = 'No memories from a previous person or task are shown.';
+        $('scenario-content').setAttribute('aria-busy', 'false');
+      } finally { clearTimeout(timeout); }
+    }
+    document.querySelectorAll('[data-owner]').forEach(button => {
+      button.onclick = () => {
+        if (owner === button.dataset.owner) return;
+        owner = button.dataset.owner;
+        load();
+      };
+    });
+    const tabs = [...document.querySelectorAll('[data-scenario]')];
+    tabs.forEach((button, index) => {
+      button.onclick = () => {
+        if (scenario === button.dataset.scenario) return;
+        scenario = button.dataset.scenario;
+        load();
+      };
+      button.onkeydown = event => {
+        let next;
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        tabs[next].focus();
+        tabs[next].click();
+      };
+    });
+    $('task-icon').append(icon('project'));
+    $('page-icon').append(icon('resource'));
+    $('footer-icon').append(icon('link'));
+    new ResizeObserver(() => { if (data && paths.length) renderGraph(); }).observe($('graph'));
+    load();
+  </script>
+</body>
+</html>

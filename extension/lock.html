@@ -1,18 +1,76 @@
-<!doctype html><meta charset="utf-8"><title>Locked</title>
-<style>body{font:16px/1.5 -apple-system,system-ui;max-width:560px;margin:12vh auto;padding:0 24px;color:#222}h1{font-size:28px;margin:0 0 8px}code{background:#f3f3f3;padding:2px 6px;border-radius:4px}button{font:inherit;padding:10px 16px;border-radius:8px;border:1px solid #999;background:#fff;cursor:pointer;margin-right:8px}.p{font-size:48px;font-weight:700}</style>
-<h1>Not now.</h1>
-<p>Your task is <b id="task"></b>.</p>
-<p class="p"><span id="p"></span> distraction</p>
-<p id="title"></p>
-<p><button id="wrong">This is on task (open it, teach the gate)</button><button id="back">Go back</button></p>
-<script>
-const q=new URLSearchParams(location.search);
-document.getElementById("task").textContent=q.get("task");
-document.getElementById("p").textContent=Math.round(q.get("p")*100)+"%";
-document.getElementById("title").textContent=q.get("t")+" — "+q.get("u");
-document.getElementById("back").onclick=()=>history.go(-2);
-document.getElementById("wrong").onclick=async()=>{
-  await fetch("http://127.0.0.1:8790/override",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:q.get("u"),title:q.get("t"),label:0.0,model_p:+q.get("p"),task:q.get("task")})});
-  location.replace(q.get("u"));
-};
-</script>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A moment for your focus · Floodgate</title>
+  <style>
+    :root { color-scheme: light; --paper: #f6f6f3; --ink: #262623; --muted: #6b6b68; --line: #e2e3dc; --blue: #365edc; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 30px 42px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 650; letter-spacing: -.4px; }
+    .mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--ink); color: var(--paper); }
+    .header-note { color: #6b6b68; font-size: 11px; letter-spacing: .15px; }
+    main { width: min(100% - 48px, 570px); margin: clamp(38px, 9vh, 105px) auto 72px; }
+    .pause { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 25px; border: 1px solid #dcded5; border-radius: 15px; background: #eeefe8; color: #737b67; }
+    h1 { margin: 0 0 12px; font-size: clamp(34px, 4vw, 45px); line-height: 1.12; font-weight: 600; letter-spacing: -1.8px; }
+    .intro { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
+    .focus { margin: 34px 0 25px; padding: 0 0 26px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 8px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; }
+    #task { margin: 0; font-size: clamp(24px, 3vw, 30px); line-height: 1.25; font-weight: 550; letter-spacing: -.8px; overflow-wrap: anywhere; }
+    .page { display: flex; align-items: flex-start; gap: 12px; }
+    .page-icon { display: grid; place-items: center; flex: 0 0 36px; height: 40px; margin-top: 1px; border: 1px solid var(--line); border-radius: 9px; background: #fffefb; color: #8c9085; }
+    .page-info { min-width: 0; }
+    #title { margin: 0; font-size: 14px; line-height: 1.45; font-weight: 550; overflow-wrap: anywhere; }
+    #url { margin: 3px 0 0; color: #6b6b68; font-size: 12px; overflow-wrap: anywhere; }
+    .estimate { display: inline-flex; align-items: center; gap: 6px; margin-top: 11px; padding: 4px 9px; border: 1px solid #e0e4e7; border-radius: 6px; color: #64717d; background: #f0f3f5; font-size: 10px; line-height: 1.5; letter-spacing: .1px; }
+    .estimate-dot { width: 4px; height: 4px; border-radius: 50%; background: #8297ab; }
+    #p { font-variant-numeric: tabular-nums; }
+    .actions { display: flex; gap: 10px; margin-top: 30px; }
+    button { min-height: 46px; padding: 11px 22px; border: 1px solid transparent; border-radius: 11px; font: inherit; font-size: 13px; font-weight: 550; cursor: pointer; transition: background .15s, transform .15s; }
+    #back { background: var(--blue); color: #fff; }
+    #back:hover { background: #1958bd; }
+    #wrong { border-color: #d9dcd2; background: #fffefb; color: #51564b; }
+    #wrong:hover { border-color: #bfc5b5; background: #eff1e9; }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: .6; cursor: wait; }
+    :focus-visible { outline: 3px solid #9dbfec; outline-offset: 4px; }
+    .correction { max-width: 480px; margin: 17px 0 0; color: #6b6b68; font-size: 11px; line-height: 1.65; }
+    #status { min-height: 20px; margin: 12px 0 0; color: #596b53; font-size: 12px; overflow-wrap: anywhere; }
+    #status[data-tone="error"] { color: #9d463e; }
+    @media (max-width: 520px) { header { padding: 24px; } .header-note { display: none; } main { margin-top: 35px; } .actions { flex-direction: column; } button { width: 100%; } }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M3 4h14M3 10h10M3 16h6" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/></svg></span> Floodgate</div>
+    <span class="header-note">Your attention, with intention.</span>
+  </header>
+  <main>
+    <div class="pause" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6 4.5v9M12 4.5v9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+    <h1>A moment for your focus.</h1>
+    <p class="intro">This page may take you away from what you had in mind.</p>
+    <section class="focus" aria-labelledby="focus-label">
+      <p class="eyebrow" id="focus-label">You’re working on</p>
+      <h2 id="task">Your current task</h2>
+    </section>
+    <section class="page" aria-label="The page you opened">
+      <span class="page-icon" aria-hidden="true"><svg width="17" height="19" viewBox="0 0 18 20" fill="none"><path d="M4 2h6l4 4v12H4V2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 2v5h4M7 11h4M7 14h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+      <div class="page-info">
+        <p id="title">This page</p>
+        <p id="url"></p>
+        <p class="estimate"><span class="estimate-dot" aria-hidden="true"></span><span id="p">—</span> estimated distraction</p>
+      </div>
+    </section>
+    <div class="actions">
+      <button id="back" type="button">Go back</button>
+      <button id="wrong" type="button" aria-describedby="correction-note">Open this page <span aria-hidden="true">↗</span></button>
+    </div>
+    <p class="correction" id="correction-note">Opening records this page as useful for your current task.</p>
+    <p id="status" role="status" aria-live="polite" aria-atomic="true"></p>
+  </main>
+  <script src="lock.js"></script>
+</body>
+</html>

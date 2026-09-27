@@ -123,7 +123,7 @@ Trained 14:19 in 20 River steps; model card `models/open-jev-river-v1.json`. On 
 - **Latency:** River's shared pool is ~4 s per decision vs Jev's ~0.3 s. Mitigation: cache, prefetch on hover, and a dedicated deployment later.
 - **Calibration without Brier:** keep steps low, fit temperature, watch calibrated NLL.
 - **Labels:** rule labels teach rules. The value is in hand labels and overrides.
-- **Privacy:** browsing history never leaves the laptop unless you train on it; all personal data files are gitignored.
+- **Privacy:** live scoring sends URL, title, task, and any retrieved personal context to River. The optional GBrain demo stores memories locally in separate owner stores; a hosted brain would also receive the records written to it. Personal data files are kept outside the repository or gitignored.
 
 ## 11. Team and next steps
 
