@@ -171,6 +171,11 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  // v2 made the team's River model the default: move installs still on the old default (the heuristic) over to it.
+  const { settings: saved } = await chrome.storage.local.get("settings");
+  if (saved && (saved.settingsVersion ?? 1) < 2) {
+    await setSettings({ settingsVersion: 2, ...(saved.provider === "heuristic" ? { provider: "systemone" } : {}) });
+  }
   // Content scripts only arrive in tabs opened after install; inject them into the tabs already open.
   for (const t of await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] })) {
     chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["content.js"] }).catch(() => {});

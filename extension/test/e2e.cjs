@@ -72,7 +72,9 @@ const freePort = async () => {
     const { settings: cur = {} } = await chrome.storage.local.get("settings");
     await chrome.storage.local.set({ settings: { ...cur, ...s } });
   }, settings);
-  await set({ task: "research the Jev model for the hackathon", mode: "focus", onboarded: true });
+  const firstRun = await sw.evaluate(async () => (await chrome.storage.local.get("settings")).settings);
+  check(!firstRun || (firstRun.provider ?? "systemone") === "systemone", "the River model is the default provider");
+  await set({ task: "research the Jev model for the hackathon", mode: "focus", onboarded: true, provider: "heuristic" });
 
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && errors.push(`page: ${m.text()}`));
@@ -105,6 +107,13 @@ const freePort = async () => {
   await sleep(1500);
   let u = await ui();
   check(!u.block && !u.nudge, "on-task page is let through");
+
+  // 1b. a site's home page stays open so you can search (YouTube's home used to get blocked)
+  await page.goto(`http://tube.fgtest:${PORT}/`);
+  await sleep(1500);
+  u = await ui();
+  const homeLog = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
+  check(!u.block && !u.nudge && /Home page/.test(homeLog?.reason || ""), `home page is not blocked (${homeLog?.reason})`);
 
   // 2. off-task entertainment -> block, video paused, scroll locked
   await page.goto(SITE("tube.fgtest", "GTA 6 gameplay funny moments compilation"));
@@ -273,6 +282,40 @@ const freePort = async () => {
   const lastG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).find((e) => /Minecraft speedrun any/.test(e.title));
   check(lastG && !lastG.providerError, "decision still works with GBrain enrichment on");
   await set({ enrichers: {} });
+
+  // 13b. the default provider: a Jev-compatible /v1/systemone with a bearer token (stand-in for the ngrok River model)
+  const seen = [];
+  const jev = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      res.setHeader("Content-Type", "application/json");
+      if (req.method === "GET") return res.end(JSON.stringify({ models: [{ name: "floodgate-personal-v1", checkpoint: "river://x", temperature: 1 }] }));
+      if (req.headers.authorization !== "Bearer s3cret") return (res.statusCode = 401), res.end('{"detail":"missing or wrong bearer token"}');
+      const b = JSON.parse(body);
+      seen.push({ state: b.state, ngrok: req.headers["ngrok-skip-browser-warning"] });
+      const p = /speedrun|gameplay|funny/i.test(b.state) ? 0.93 : 0.08;
+      setTimeout(() => res.end(JSON.stringify({ answers: { distraction: { type: "noul", noul: p } }, model: "floodgate-personal-v1" })), 800);
+    });
+  });
+  const JEV = `http://127.0.0.1:${await listen(jev)}/v1/systemone`;
+  await set({ provider: "systemone", providerSettings: { systemone: { endpoint: JEV } } });
+  await page.goto(SITE("tube.fgtest", "Roblox obby funny fails"));
+  await sleep(2500);
+  const noKey = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
+  check(/unreachable/.test(noKey.source) && /API key/.test(noKey.providerError || ""), `without a token: falls back and says why (${noKey.providerError})`);
+  await set({ providerSettings: { systemone: { endpoint: JEV, apiKey: "s3cret" } } });
+  await page.goto(SITE("tube.fgtest", "Skibidi toilet speedrun reaction"));
+  await sleep(3000);
+  const withKey = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
+  check((await ui()).block && /River model/.test(withKey.source) && withKey.p === 0.93, `with the token: River model decides (${withKey.source}, p=${withKey.p})`);
+  check(/^URL: http:\/\/tube\.fgtest:\d+\/page\?t=Skibidi\S* Title: Skibidi toilet speedrun reaction\. Time: \d\d:\d\d \w+day\. Stated task: research the Jev model for the hackathon\.$/.test(seen.at(-1)?.state || ""), `sent the training-format text line: ${seen.at(-1)?.state}`);
+  check(seen.at(-1)?.ngrok === "true", "sends ngrok-skip-browser-warning");
+  await page.goto(SITE("tube.fgtest", "Jev explained by the TypeSafe team"));
+  await sleep(3000);
+  check(!(await ui()).block, "with the token: on-task page passes");
+  jev.close();
+  await set({ provider: "heuristic" });
 
   // 14. Optional: the real gate server (e.g. an ngrok URL):  FLOODGATE_GATE=https://… npm run e2e
   if (process.env.FLOODGATE_GATE) {

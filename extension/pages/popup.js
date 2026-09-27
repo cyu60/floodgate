@@ -69,7 +69,7 @@ async function renderHealth() {
     status.title = "Built-in rules. Connect your River model in Dashboard → Model.";
   } else {
     status.className = `pill status ${h.ok ? "ok" : "bad"}`;
-    status.lastChild.textContent = h.ok ? "Your model · online" : "Model offline";
+    status.lastChild.textContent = h.ok ? "Your model · online" : /API key/.test(h.detail || "") ? "Add API key" : "Model offline";
     status.title = `${h.name}: ${h.detail}${h.ok ? "" : " (using the offline heuristic meanwhile)"}`;
   }
 }
