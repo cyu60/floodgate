@@ -1,0 +1,94 @@
+{
+  "name": "open-jev-river-v1",
+  "base": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "checkpoint": "river://6ce27692-7840-4999-b599-271983c97c9f/sampler_weights/open-jev-river-v1",
+  "temperature": 3.3144540173399877,
+  "lora": {
+    "rank": 8,
+    "train_unembed": true
+  },
+  "training": {
+    "rows": 1164,
+    "epochs": 2,
+    "batch": 128,
+    "lr": 0.0002,
+    "steps": 20,
+    "data": "ZefanCai/Open-Jev-v1.1 stratified sample (18 families)"
+  },
+  "eval": {
+    "base": {
+      "temperature": 2.1147425268811277,
+      "test": {
+        "n": 228,
+        "accuracy": 0.6972477064220184,
+        "nll": 1.0327096710179058,
+        "brier": 0.4534735370663845,
+        "by_kind": {
+          "noul": 0.8783783783783784,
+          "choice": 0.6293103448275862,
+          "score": 0.5
+        }
+      },
+      "test_cal": {
+        "n": 228,
+        "accuracy": 0.6972477064220184,
+        "nll": 0.803207290320338,
+        "brier": 0.40955381495688165,
+        "by_kind": {
+          "noul": 0.8783783783783784,
+          "choice": 0.6293103448275862,
+          "score": 0.5
+        }
+      },
+      "ood_cal": {
+        "n": 115,
+        "accuracy": 0.7543859649122807,
+        "nll": 0.6101787169488078,
+        "brier": 0.3358244196112987,
+        "by_kind": {
+          "noul": 0.9183673469387755,
+          "choice": 0.6470588235294118,
+          "score": 0.5714285714285714
+        }
+      },
+      "sec": 49.03396010398865
+    },
+    "trained": {
+      "temperature": 3.3144540173399877,
+      "test": {
+        "n": 228,
+        "accuracy": 0.8623853211009175,
+        "nll": 0.6859151055981596,
+        "brier": 0.22608937683691985,
+        "by_kind": {
+          "noul": 0.9324324324324325,
+          "choice": 0.8103448275862069,
+          "score": 0.8928571428571429
+        }
+      },
+      "test_cal": {
+        "n": 228,
+        "accuracy": 0.8623853211009175,
+        "nll": 0.4497149294427701,
+        "brier": 0.22050108605207108,
+        "by_kind": {
+          "noul": 0.9324324324324325,
+          "choice": 0.8103448275862069,
+          "score": 0.8928571428571429
+        }
+      },
+      "ood_cal": {
+        "n": 115,
+        "accuracy": 0.8771929824561403,
+        "nll": 0.3779252136906564,
+        "brier": 0.21068401633143707,
+        "by_kind": {
+          "noul": 0.9387755102040817,
+          "choice": 0.803921568627451,
+          "score": 0.9285714285714286
+        }
+      }
+    }
+  },
+  "note": "Load with: python -m floodgate.open_jev.server --run models/open-jev-river-v1.json (checkpoint lives on the trainer's River account)"
+}
