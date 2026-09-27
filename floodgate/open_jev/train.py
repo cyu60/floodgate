@@ -90,7 +90,7 @@ def paired(name, new, old, n_boot=10000, seed=0):
     a, b = res["accuracy_gain"], res["brier_drop"]
     sig = lambda r: "significant" if r["p"] < 0.05 else "not significant"
     print(f"  {name:28s} acc {a['delta']:+.3f} [{a['ci95'][0]:+.3f},{a['ci95'][1]:+.3f}] p={a['p']:.3f} ({sig(a)})   "
-          f"brier -{b['delta']:.3f} [{b['ci95'][0]:+.3f},{b['ci95'][1]:+.3f}] p={b['p']:.3f} ({sig(b)})")
+          f"brier drop {b['delta']:+.3f} [{b['ci95'][0]:+.3f},{b['ci95'][1]:+.3f}] p={b['p']:.3f} ({sig(b)})")
     return res
 
 
