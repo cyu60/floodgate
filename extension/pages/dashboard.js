@@ -253,10 +253,10 @@ async function renderLabels() {
 // ---------------- model ----------------
 // Settings fields + "Test connection" for one provider (decision providers and context providers alike).
 function providerFields(p, s) {
-  if (!p.settings?.length) return null;
+  if (!p.settings?.length && !p.actions?.length) return null;
   const cfg = providerConfig(p, s);
   const msg = el("div", { className: "msg" });
-  const inputs = p.settings.map((f) =>
+  const inputs = (p.settings || []).map((f) =>
     el(
       "label",
       {},
@@ -292,7 +292,29 @@ function providerFields(p, s) {
     },
     "Test connection",
   );
-  return el("div", { className: "fields" }, inputs, p.health ? el("div", { className: "inline" }, test) : null, msg);
+  // Provider buttons, e.g. GBrain's "Sign in with GBrain" (OAuth has to start from a click on this page).
+  const actions = (p.actions || []).map((a) =>
+    el(
+      "button",
+      {
+        onclick: async (e) => {
+          e.target.disabled = true;
+          msg.textContent = `${a.label}…`;
+          msg.className = "msg";
+          try {
+            msg.textContent = (await a.run(providerConfig(p, await getSettings()))) || "Done.";
+            msg.className = "msg ok";
+          } catch (err) {
+            msg.textContent = `${a.label} failed: ${err.message}`;
+            msg.className = "msg bad";
+          }
+          e.target.disabled = false;
+        },
+      },
+      a.label,
+    ),
+  );
+  return el("div", { className: "fields" }, inputs, el("div", { className: "inline" }, actions, p.health ? test : null), msg);
 }
 
 async function renderModel() {

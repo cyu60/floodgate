@@ -268,17 +268,13 @@ const freePort = async () => {
   await dash.locator("#enrichers button", { hasText: "Test connection" }).click();
   await sleep(1200);
   const gmsg = await dash.locator("#enrichers .msg").innerText();
-  check(/Connected.*search_memory.*remember/.test(gmsg), `GBrain health: ${gmsg}`);
+  check(/Connected.*search: recall.*remember: remember/.test(gmsg), `GBrain health (pasted token): ${gmsg}`);
   await page.goto(SITE("tube.fgtest", "Minecraft speedrun any percent"));
   await sleep(3500);
   await press(/It's on task/);
   await sleep(1500);
-  const recall = await fetch("http://127.0.0.1:8799/mcp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer t" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_memory", arguments: { query: "x" } } }),
-  }).then((r) => r.text());
-  check(/Floodgate correction.*Minecraft speedrun any percent.*ON TASK/.test(recall), "override was remembered in GBrain (onLabel)");
+  const gdebug = () => fetch("http://127.0.0.1:8799/debug").then((r) => r.json());
+  check((await gdebug()).notes.some((n) => /Floodgate correction.*Minecraft speedrun any percent.*ON TASK/.test(n)), "override was remembered in GBrain (remember, with provenance)");
   const lastG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).find((e) => /Minecraft speedrun any/.test(e.title));
   check(lastG && !lastG.providerError, "decision still works with GBrain enrichment on");
   // GBrain as memory: wipe this browser's labels (like a new laptop) and the correction still comes back from GBrain
@@ -290,6 +286,34 @@ const freePort = async () => {
   const fromG = (await sw.evaluate(async () => (await chrome.storage.local.get("log")).log || [])).at(-1);
   check(!(await ui()).block && fromG.source === "GBrain memory", `with no local labels, GBrain's memory decides (${fromG.source}: ${fromG.reason})`);
   await sw.evaluate((l) => chrome.storage.local.set({ labels: l }), savedLabels);
+
+  // 13a. hosted GBrain takes OAuth only: no pasted token, "Sign in with GBrain" (discovery, DCR, PKCE via chrome.identity)
+  await set({ providerSettings: { "floodgate-gate": { endpoint: GATE }, gbrain: { endpoint: "http://127.0.0.1:8799/mcp" } } });
+  await dash.goto(`chrome-extension://${id}/pages/dashboard.html#model`);
+  await sleep(800);
+  await dash.locator("#enrichers button", { hasText: "Test connection" }).click();
+  await sleep(800);
+  check(/Not signed in/.test(await dash.locator("#enrichers .msg").innerText()), "without a token or sign-in, GBrain asks you to sign in");
+  await dash.locator("#enrichers button", { hasText: "Sign in with GBrain" }).click();
+  await sleep(3000);
+  const signMsg = await dash.locator("#enrichers .msg").innerText();
+  check(/Signed in to GBrain \(memory:read memory:full\)/.test(signMsg), `OAuth sign-in: ${signMsg}`);
+  await dash.locator("#enrichers button", { hasText: "Test connection" }).click();
+  await sleep(1200);
+  check(/Connected.*recall.*remember/.test(await dash.locator("#enrichers .msg").innerText()), "Test connection works with the OAuth token");
+  check(/^Bearer mock-access-/.test((await gdebug()).last_auth), `MCP calls carry the OAuth access token (${(await gdebug()).last_auth})`);
+  const stored = await sw.evaluate(async () => (await chrome.storage.local.get("oauth:gbrain"))["oauth:gbrain"]);
+  const inSettings = JSON.stringify(await sw.evaluate(async () => (await chrome.storage.local.get("settings")).settings));
+  check(stored?.refresh_token && !inSettings.includes(stored.access_token), "tokens kept apart from settings, with a refresh token");
+  await page.goto(SITE("tube.fgtest", "Tetris world championship final"));
+  await sleep(3500);
+  await press(/It's on task|^On task$/).catch(() => {});
+  await sleep(1500);
+  const noteCount = (await gdebug()).notes.filter((n) => /Tetris world championship final/.test(n)).length;
+  check(noteCount === 1, "a correction made while signed in is saved to GBrain");
+  await dash.locator("#enrichers button", { hasText: "Sign out" }).click();
+  await sleep(800);
+  check(!(await sw.evaluate(async () => (await chrome.storage.local.get("oauth:gbrain"))["oauth:gbrain"])), "Sign out removes the tokens");
   await set({ enrichers: {} });
 
   // 13b. the default provider: a Jev-compatible /v1/systemone with a bearer token (stand-in for the ngrok River model)

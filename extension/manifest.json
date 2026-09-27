@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "description": "You decide what flows in. Your own model judges each page against the task you set, and learns from your overrides.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "tabs", "scripting", "history", "alarms"],
+  "permissions": ["storage", "tabs", "scripting", "history", "alarms", "identity"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "content_scripts": [{ "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle" }],
