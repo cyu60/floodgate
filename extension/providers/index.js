@@ -3,8 +3,9 @@ import floodgateGate from "./floodgate-gate.js";
 import heuristic from "./heuristic.js";
 import systemone from "./systemone.js";
 import gbrain from "./gbrain.js";
+import memorable from "./memorable.js";
 
-export const PROVIDERS = [heuristic, floodgateGate, systemone, gbrain];
+export const PROVIDERS = [heuristic, floodgateGate, systemone, gbrain, memorable];
 
 export const byId = (id) => PROVIDERS.find((p) => p.id === id);
 
