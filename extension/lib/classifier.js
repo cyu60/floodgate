@@ -23,6 +23,16 @@ export function makeContext(settings) {
   };
 }
 
+/** A site's front page ("/", "/index.html", YouTube's home) with no page-specific query. */
+export function isLaunchPad(url) {
+  try {
+    const u = new URL(url);
+    return /^\/(index\.html?)?$/i.test(u.pathname) && ![...u.searchParams.keys()].some((k) => /^(q|v|search_query|query|p|id)$/.test(k));
+  } catch {
+    return false;
+  }
+}
+
 export const actionFor = (p, mode) => (p >= mode.blockAt ? "block" : p >= mode.nudgeAt ? "nudge" : "allow");
 
 function withTimeout(promise, ms, what) {
@@ -65,6 +75,9 @@ export async function classify(page, settings, labels, { onPending } = {}) {
 
   if (mem && mem.confidence >= 0.95) {
     [p, reason, source] = [mem.p, mem.reason, "your labels"];
+  } else if (isLaunchPad(page.url)) {
+    // A site's home page is where you search for the thing you need (YouTube's home, a search box); judge what you open next.
+    return done({ action: "allow", p: null, source: "rules", reason: "Home page: open so you can search. Floodgate checks what you open next." });
   } else {
     const provider = byId(settings.provider) || byId("heuristic");
     // Break mode and "no task yet" never block, so they never spend a model call.
