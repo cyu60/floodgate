@@ -22,7 +22,7 @@ Open the Floodgate popup → **Dashboard → Model**, pick a provider and click 
 
 | Provider | Start it with | Use it for |
 |---|---|---|
-| **River open Jev (gate server)** | `python -m floodgate.gate_server --run data/runs/<run>.json` (port 8790) | The real thing: your model, trained on River |
+| **River open Jev (gate server)** | `python -m floodgate.gate_server --run models/open-jev-river-v1.json` (port 8790) | The real thing: the team's model, trained on River (86% on Open-Jev test) |
 | same, mocked | `python3 tools/mock_gate.py` (same API, no River or venv, ~1.5 s fake latency) | Building and demoing before the River model is up |
 | **Jev-compatible endpoint** | `python -m floodgate.open_jev.server --run data/runs/<run>.json` (port 8791) | Any `/v1/systemone` server; also TypeSafe's hosted Jev as a baseline (API key + model `jev-latest`) |
 | **Offline heuristic** | built in | Default, and the fallback whenever the model can't be reached |
@@ -42,7 +42,7 @@ If the model is down, Floodgate falls back to the heuristic and says so on the b
 | **Learns immediately.** Your labels apply on the next visit, before any retraining: an exact page or domain decides outright; similar titles shift the score | `lib/memory.js` |
 | **Train on your browsing history.** *Teach* tab loads your Chrome history and asks about the pages it is least sure of first. Keys `1` `2` `3`, `Space`, `Z` | Dashboard → Teach |
 | **Training rows export.** Labels become Open-Jev noul rows in the exact format of `prep_gate_dataset.py` | Dashboard → Share, `lib/rows.js` |
-| **Share your model.** A model card holds your River checkpoint and temperature, your rules, and (only if you opt in) your labelled pages. Importing one loads the checkpoint into your gate server | Dashboard → Share, `lib/modelcard.js` |
+| **Share your model.** A model card holds your River checkpoint and temperature, your rules, and (only if you opt in) your labelled pages. Importing one loads the checkpoint into your gate server. The repo's River cards (`models/open-jev-river-v1.json`) import as-is, and exported cards work with `gate_server --run` | Dashboard → Share, `lib/modelcard.js` |
 | **Toolbar badge** shows the percent for the current tab (red = blocked, amber = asked, green = allowed) | `background.js` |
 | **Pause** for 15 minutes from the popup, or press `Alt+Shift+P` | popup, `background.js` |
 
@@ -134,4 +134,4 @@ Settings, labels and the decision log live in `chrome.storage.local` in your bro
 4. Open a blog that's hard to call: the **ask card** appears. Answer "It depends".
 5. On a blocked page that is actually on task, click **It's on task**. Reload: it passes with "You labelled this page on task". That's a training row.
 6. Switch to **Creator**: a meme compilation passes; the unrelated explainer now asks instead of blocking.
-7. Dashboard → **Teach**: label a few history pages with `1` / `2` / `3`. **Share**: download the training rows (River trains on them), export a model card, and a teammate imports it along with its River checkpoint.
+7. Dashboard → **Teach**: label a few history pages with `1` / `2` / `3`. **Share**: download the training rows (River trains on them), export a model card, and a teammate imports it along with its River checkpoint. Importing `models/open-jev-river-v1.json` swaps the team's trained model into a running gate server with no restart.

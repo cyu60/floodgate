@@ -8,6 +8,8 @@ export function buildCard({ name, author, description, settings, labels, include
   const own = labels.filter((l) => !l.source);
   return {
     floodgate_model_card: CARD_VERSION,
+    // Top level too, so `python -m floodgate.gate_server --run <this card>` serves the same model.
+    ...(backend?.checkpoint ? { checkpoint: backend.checkpoint, temperature: backend.temperature ?? 1.0 } : {}),
     name: name || "My Floodgate model",
     author: author || "",
     description: description || "",
@@ -30,11 +32,26 @@ export function parseCard(text) {
   } catch {
     throw new Error("That file is not JSON.");
   }
-  if (card?.floodgate_model_card !== CARD_VERSION) throw new Error("Not a Floodgate model card (missing floodgate_model_card: 1).");
+  if (card?.floodgate_model_card === undefined && typeof card?.checkpoint === "string") card = fromRunCard(card);
+  if (card?.floodgate_model_card !== CARD_VERSION) throw new Error("Not a Floodgate model card (missing floodgate_model_card: 1, or a River run with a checkpoint).");
   card.name = String(card.name || "Shared model").slice(0, 80);
   card.examples = Array.isArray(card.examples) ? card.examples.filter((e) => e && typeof e.url === "string" && typeof e.label === "number") : [];
   card.rules = { allow: [].concat(card.rules?.allow || []).map(String), block: [].concat(card.rules?.block || []).map(String) };
   return card;
+}
+
+// A River training run / model card from the repo (models/*.json, data/runs/*.json): checkpoint + temperature + evals.
+function fromRunCard(run) {
+  const acc = run.eval?.trained?.test_cal?.accuracy ?? run.eval?.trained?.test?.accuracy;
+  return {
+    floodgate_model_card: CARD_VERSION,
+    name: run.name || "River model",
+    author: run.author || "",
+    description: acc != null ? `River-trained open Jev, ${Math.round(acc * 1000) / 10}% on Open-Jev test` : "River-trained open Jev",
+    backend: { provider: "floodgate-gate", checkpoint: run.checkpoint, temperature: run.temperature ?? 1.0, base_model: run.base || null },
+    rules: {},
+    examples: [],
+  };
 }
 
 /** Examples from a card, as labels tagged with their source so they can be removed again. */

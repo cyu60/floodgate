@@ -100,4 +100,17 @@ test("model cards round-trip, and examples are private unless opted in", () => {
   assert.equal(card.backend.checkpoint, "river://ckpt/1");
   assert.equal(cardLabels(card)[0].source, "import:Mine");
   assert.throws(() => parseCard('{"hello": 1}'), /Not a Floodgate model card/);
+  assert.equal(buildCard({ name: "x", settings, labels, backend }).checkpoint, "river://ckpt/1", "gate_server --run can read it");
+});
+
+test("the repo's River model cards (models/*.json) import as-is", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const text = await readFile(new URL("../../models/open-jev-river-v1.json", import.meta.url), "utf8");
+  const card = parseCard(text);
+  const run = JSON.parse(text);
+  assert.equal(card.backend.checkpoint, run.checkpoint);
+  assert.equal(card.backend.temperature, run.temperature);
+  assert.equal(card.name, "open-jev-river-v1");
+  assert.deepEqual(card.examples, []);
+  assert.match(card.description, /River-trained open Jev, \d+(\.\d)?% on Open-Jev test/);
 });

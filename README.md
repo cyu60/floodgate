@@ -180,9 +180,11 @@ Load it: `chrome://extensions` → Developer mode → **Load unpacked** → the 
 Then point it at your model (Dashboard → Model → "River open Jev (gate server)"):
 
 ```bash
-python -m floodgate.gate_server --task "finish the hackathon demo" --run data/runs/open-jev-river-v1-*.json
+python -m floodgate.gate_server --task "finish the hackathon demo" --run models/open-jev-river-v1.json
 python3 tools/mock_gate.py        # same API with no River, for building and demoing the extension
 ```
+
+Or load the trained model into a running gate server from the extension: Dashboard → Share → import `models/open-jev-river-v1.json`.
 
 Full guide (features, modes, the gate server contract, how teammates plug in GBrain/QM providers, demo script): [extension/README.md](extension/README.md).
 

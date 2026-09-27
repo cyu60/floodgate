@@ -11,7 +11,7 @@ import { getJson, postJson, trimSlash } from "./http.js";
 export default {
   id: "floodgate-gate",
   name: "River open Jev (gate server)",
-  description: "Your own model, trained on River. Run: python -m floodgate.gate_server --run data/runs/<run>.json",
+  description: "Your own model, trained on River. Run: python -m floodgate.gate_server --run models/open-jev-river-v1.json",
   settings: [
     { key: "endpoint", label: "Gate server URL", default: "http://127.0.0.1:8790" },
     { key: "timeoutMs", label: "Timeout (ms)", default: 15000, type: "number" },
