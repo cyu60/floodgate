@@ -18,11 +18,12 @@ from transformers import AutoTokenizer
 
 from floodgate import BASE_MODEL, client
 from floodgate.open_jev.core import compile_request, softmax
+from floodgate.open_jev.letters import score_letters
 from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 LOG = Path(__file__).resolve().parent.parent / "data" / "gate_log.jsonl"
 QUESTION = "Is this page a distraction from the stated task?"
-STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0}
+STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "letters": False}
 CACHE: dict[str, tuple[float, float]] = {}
 LOCK = threading.Lock()
 
@@ -36,7 +37,9 @@ def decide(session, tok, url: str, title: str) -> dict:
         state = {"url": url[:300], "title": title[:160], "time": f"{datetime.now():%H:%M %A}", "stated_task": STATE["task"]}
         recs = compile_request(state, {"distraction": {"type": "noul", "instructions": QUESTION}})
         with LOCK:
-            logits = score_records(recs, Renderer(tok), session_sampler(session, BASE_MODEL, STATE["checkpoint"]))
+            sampler = session_sampler(session, BASE_MODEL, STATE["checkpoint"])
+            # letter-readout checkpoints (train_letters.py) are asked "A. No / B. Yes", others the per-candidate Yes/No prompt
+            logits = score_letters(recs, tok, sampler) if STATE["letters"] else score_records(recs, Renderer(tok), sampler)
         p = softmax(logits[0], STATE["temperature"])[1]
         CACHE[key] = (p, now)
     return {"p": round(p, 3), "lock": p >= STATE["threshold"], "task": STATE["task"]}
@@ -91,12 +94,14 @@ def main():
     ap.add_argument("--checkpoint")
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--port", type=int, default=8790)
-    ap.add_argument("--run", help="data/runs/*.json from open_jev.train: uses its checkpoint + temperature")
+    ap.add_argument("--run", help="run card (data/runs/*.json or models/*.json): uses its checkpoint + temperature")
     a = ap.parse_args()
+    letters = False
     if a.run:
         info = json.load(open(a.run))
         a.checkpoint, a.temperature = info["checkpoint"], info["temperature"]
-    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature)
+        letters = info.get("method") == "semif-letters"
+    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature, letters=letters)
     tok = AutoTokenizer.from_pretrained(BASE_MODEL)
     with client().session(project="floodgate") as session:
         print(f"Floodgate on http://127.0.0.1:{a.port}  task={a.task!r} threshold={a.threshold} ckpt={a.checkpoint}")
