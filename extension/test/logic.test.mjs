@@ -145,3 +145,18 @@ test("the River model gets the exact text line it was trained on", () => {
   const ts = new Date(2026, 8, 27, 14, 5).getTime();
   assert.equal(line, labelToRow({ url: "https://www.youtube.com/watch?v=1", title: "Jev in 100 Seconds", task: "research Jev", label: 0, ts }).state);
 });
+
+test("GBrain: the notes onLabel writes are read back as verdicts", async () => {
+  const { parseCorrections } = await import("../providers/gbrain.js");
+  const text = [
+    'Current focus: finishing the Floodgate demo.',
+    'Floodgate correction (2026-09-27T21:00:00.000Z): while working on "research Jev", the page "GTA 6 "Leaked" trailer" (https://www.youtube.com/watch?v=abc) is a DISTRACTION for me. The model had said 40% distraction.',
+    'Floodgate correction (2026-09-27T22:00:00.000Z): while working on "research Jev", the page "GTA 6 "Leaked" trailer" (https://www.youtube.com/watch?v=abc) is ON TASK for me. The model had said 90% distraction.',
+  ].join("\n");
+  const c = parseCorrections(text);
+  assert.equal(c.length, 2);
+  assert.deepEqual([c[0].label, c[1].label], [1, 0]);
+  assert.equal(c[1].url, "https://www.youtube.com/watch?v=abc");
+  assert.equal(c[0].title, 'GTA 6 "Leaked" trailer');
+  assert.ok(c[1].ts > c[0].ts);
+});

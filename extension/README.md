@@ -33,7 +33,7 @@ Open the Floodgate popup → **Dashboard → Model**, pick a provider and click 
 | same, mocked | `python3 tools/mock_gate.py` (same API, no River or venv, ~1.5 s fake latency) | Building and demoing before the River model is up |
 | **Jev-compatible endpoint** | `python -m floodgate.open_jev.server --run data/runs/<run>.json` (port 8791) | Any `/v1/systemone` server; also TypeSafe's hosted Jev as a baseline (API key + model `jev-latest`) |
 | **Offline heuristic** | built in | Default, and the fallback whenever the model can't be reached |
-| **GBrain memory** (context provider) | gbrain.io workspace → Add a connection → copy the token (Full access to remember) | Remembers every correction in GBrain per task, and recalls what GBrain knows about your current task. Test offline with `python3 tools/mock_gbrain_mcp.py` (endpoint `http://127.0.0.1:8799/mcp`, any token) |
+| **GBrain memory** (context provider) | gbrain.io workspace → Add a connection → copy the token (Full access to remember) | Remembers every correction in GBrain per task, and reads them back: a page you corrected on any device is decided by GBrain's memory ("GBrain remembers: …") before the model is asked. Tick it under Dashboard → Model → Context providers, paste the token, Test connection. Test offline with `python3 tools/mock_gbrain_mcp.py` (endpoint `http://127.0.0.1:8799/mcp`, any token) |
 
 If the model is down, Floodgate falls back to the heuristic and says so on the block screen ("offline heuristic (… unreachable)"). While a slow model is thinking, likely distractions stay behind a "checking" screen with the video paused.
 
@@ -92,7 +92,8 @@ To add one: copy `providers/_template.js` (it documents every field of `page`, `
 Suggested split:
 
 - **River (training and serving):** nothing to change in the extension. Keep `gate_server.py` answering the contract below. Train on exported rows with `python -m floodgate.open_jev.train --extra floodgate-labels.jsonl`. Overrides also arrive live at `POST /override` (in `data/gate_log.jsonl`).
-- **GBrain:** a provider with `enrich` (what you're working on, your goals: extra context for the model) and/or `onLabel` (store each label as a memory, so your judgment lives in your brain too).
+- **GBrain (done, `providers/gbrain.js`):** `onLabel` writes each correction to GBrain, `recall` reads them back to decide pages (memory that follows you across devices), `enrich` fetches task context.
+- **Memorable (next):** copy the GBrain pattern: `onLabel` to store a correction, `recall` to return `{ p, reason, source }` for a page and task (or `null`), add it to `PROVIDERS`. Order of authority: your local labels → memory providers → the model → the heuristic.
 - **QM:** the same pattern: `classify` if it decides, `enrich` if it adds context, `onLabel` if it learns.
 
 ### Gate server contract (`floodgate/gate_server.py`, mocked by `tools/mock_gate.py`)
