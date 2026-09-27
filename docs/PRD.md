@@ -12,6 +12,24 @@ A browser gate that asks a small, calibrated decision model "is this page a dist
 - The judgment "is this on-task?" needs language understanding, so it needs a model. But a chat LLM is the wrong tool: slow, expensive per call, returns prose you must parse, and its "80% sure" is decoration, not a probability you can threshold.
 - TypeSafe's **Jev** solves the interface (typed, calibrated decisions, no text) but it is closed, the same weights serve everyone, and it cannot be fine-tuned on *your* judgment.
 
+## 2a. The idea in one example (team, 14:00)
+
+Use your own browsing history to train your own model. You are watching a YouTube video about what you are doing right now, and it lets you through. Then you drift into another YouTube video that is informative but unrelated to your task, and Floodgate recognises that and blocks it. Same site, same "educational" look, different answer, because the judgment is relative to **your stated task** and learned from **your** history. And because the model is yours, you can **share it**: a checkpoint is a file-like `river://` path you can hand to a friend or a team.
+
+### Measured: even Jev cannot tell your task (Sep 27, 14:05)
+
+Task: "research TypeSafe's Jev model for the hackathon". Question: "Is this page a distraction from the stated task?" (noul, P(yes)).
+
+| Page | Jev 1.13 | Open Jev on River (untrained base) |
+|---|---:|---:|
+| Fireship video on Jev (on task) | 0.61 | 0.56 |
+| Satellite-launch explainer (informative, off task) | 0.95 | 0.95 |
+| TypeSafe's own Noul docs page (on task) | **0.75** | 0.56 |
+| GTA 6 gameplay (entertainment) | 0.96 | 0.93 |
+| Same satellite video, task = "report on launch failures" | 0.33 | 0.56 |
+
+Both models catch the obvious cases. Both are unsure or wrong on the pages that matter: Jev scores the TypeSafe docs you are reading *for this exact task* as 75% distraction. That gap is the product: a general model does not know your task boundaries; a model trained on your overrides does. (Jev ~120–360 ms per call; River base ~6 s for a batch of 5. River returns coarsely rounded logprobs, so untrained scores cluster.)
+
 ## 3. Insight
 
 1. A decision model only needs one number per candidate: how much the model prefers "Yes" over "No". **Open-Jev** (Zefan Cai, Apache/MIT) is a LoRA plus a scalar head initialised as `lm_head[Yes] − lm_head[No]`, trained with candidate NLL plus a calibration temperature. It scores 197/231 on public JevBench vs Jev's 200/231.
@@ -48,6 +66,11 @@ A browser gate that asks a small, calibrated decision model "is this page a dist
 - Brier term in the loss (River has no custom losses).
 - Page-content features (v1 uses URL + title + time + task only).
 - Multi-user accounts, mobile.
+
+### Stretch (if time)
+
+- **Jev as teacher:** label unlabelled history rows with Jev (`floodgate/jev.py`), then correct the ones it gets wrong by hand; train on the corrected set.
+- **Share your model:** publish a checkpoint path + temperature as a small JSON "model card" teammates can load with `--run`.
 
 ## 6. Architecture
 
