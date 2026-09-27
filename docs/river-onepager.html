@@ -1,3 +1,7 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <title>Floodgate on River</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
@@ -129,26 +133,27 @@
   }
 </style>
 
+</head>
+<body>
 <main class="page">
   <header>
     <div class="eyebrow">Own Your Intelligence Hackathon · YC HQ · Sep 27, 2026</div>
-    <h1>Floodgate: a personal decision classifier trained on River</h1>
-    <p class="lede">We turned <code>Qwen3.6-35B-A3B</code> into a calibrated yes/no classifier using only River's sampling and LoRA training, then trained it on 273 labels from one person's own browsing history. On pages it never saw, agreement with that person's labels went from about 66–69% to 77–80% in 8 River steps.</p>
+    <h1>Floodgate: personal classification on River</h1>
+    <p class="lede">273 browsing labels + River LoRA: held-out agreement 66–69% → 77–80% in 8 steps.</p>
     <p class="meta">Team: cyu60, quachphu, TriNguyen1110, AdityaGaur77, atilavahedian · Code: <a href="https://github.com/cyu60/floodgate">github.com/cyu60/floodgate</a></p>
   </header>
 
   <section>
     <div class="eyebrow">The classifier</div>
-    <h2>A Jev-style decision model, built from River primitives</h2>
-    <p>Floodgate never generates text. Each question is a single prompt that ends in "Answer Yes or No." We ask River for one token with its top-20 logprobs and read the gap between "Yes" and "No". That gap is exactly the value Open-Jev uses to initialise its decision head (<code>lm_head[Yes] − lm_head[No]</code>), so the untrained base on River is Open-Jev at step 0. A single fitted temperature turns the gap into a calibrated probability.</p>
+    <h2>Yes/No logprobs → calibrated decisions</h2>
+    <p>Sample one token, top-20 logprobs; fit temperature T. The gap matches Open-Jev's initial head (<code>lm_head[Yes] − lm_head[No]</code>) at step 0.</p>
     <div class="formula">score = logprob("Yes") − logprob("No") at the first answer token<br>P(yes) = sigmoid(score / T)</div>
-    <p>It answers two questions today:</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Decision</th><th>What we ask</th><th>Output</th></tr></thead>
+        <thead><tr><th>Decision</th><th>Inputs</th><th>Output</th></tr></thead>
         <tbody>
-          <tr><td>Is this page a distraction?</td><td>One yes/no over URL, title, time and the task you said you're doing</td><td>P(distraction); the browser extension blocks above 0.7</td></tr>
-          <tr><td>Should I send this article to this person?</td><td>Four yes/no questions in one call: relevant to them, new to them, timely, appropriate for the relationship</td><td>Code combines them into <span class="v send">SEND</span> <span class="v hold">HOLD</span> <span class="v dont">DON'T SEND</span></td></tr>
+          <tr><td>Distraction?</td><td>URL, title, time, task</td><td>Block above 0.7</td></tr>
+          <tr><td>Send article?</td><td>Relevance, novelty, timing, relationship</td><td><span class="v send">SEND</span> <span class="v hold">HOLD</span> <span class="v dont">DON'T SEND</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -156,98 +161,100 @@
 
   <section>
     <div class="eyebrow">Our own labelled data</div>
-    <h2>273 labels from one person's Chrome history</h2>
+    <h2>One person's Chrome history; no public data</h2>
     <div class="facts">
-      <div class="fact"><b>~12,000</b><span>Chrome visits, Jun 25 – Sep 23</span></div>
-      <div class="fact"><b>120</b><span>real pages, each judged under 2 of 4 real tasks</span></div>
-      <div class="fact"><b>273</b><span>labelled rows: 170 distraction, 103 work</span></div>
-      <div class="fact"><b>50 of 120</b><span>pages flip answer depending on the task</span></div>
+      <div class="fact"><b>~12,000</b><span>visits, Jun 25 – Sep 23</span></div>
+      <div class="fact"><b>120</b><span>pages × 2 of 4 tasks</span></div>
+      <div class="fact"><b>273</b><span>labels: 170 distraction / 103 work</span></div>
+      <div class="fact"><b>50 of 120</b><span>pages flip by task</span></div>
     </div>
     <ol class="steps">
-      <li>Pulled the pages simple domain rules can't judge (1,678 ambiguous pages) and sampled 120: 45 YouTube/Wikipedia/X pages, 20 Google searches, 35 domains the rules had never seen, 20 rule-flagged distractions.</li>
-      <li>Paired each page with two of four real tasks: building Floodgate, preparing a founder session, researching AI models, evening wind-down.</li>
-      <li>An LLM teacher (Codex) drafted a P(distraction) and a one-line reason for each of the 240 pairs from a short profile of the person, and the person chose to use them as drafted. We added 33 labels the person made by hand.</li>
-      <li>Split by page, not by row: 208 rows to train on, 65 held out, and no page appears in both.</li>
+      <li>1,678 ambiguous pages → 45 YouTube/Wikipedia/X, 20 searches, 35 unseen domains, 20 rule-flagged distractions.</li>
+      <li>Tasks: Floodgate, founder session, AI research, wind-down.</li>
+      <li>240 Codex-drafted probabilities/reasons, used as drafted by the person's choice; 33 hand labels.</li>
+      <li>208 train / 65 held out, split by page without overlap.</li>
     </ol>
-    <p class="note">No public data went into this model. The labels stay on the laptop; only the training rows went to River.</p>
+    <p class="note">Labels stay on the laptop; training rows went to River.</p>
   </section>
 
   <section>
     <div class="eyebrow">The training run</div>
-    <h2>8 steps, about 2.5 minutes, no GPU of our own</h2>
-    <p>River only trains next-token prediction, so we graded exactly one token. Each row becomes the chat-templated prompt (thinking off) plus a single target token, "Yes" or "No". Every prompt position has weight 0, so only the answer token is trained. A soft label p becomes two rows: "Yes" weighted p and "No" weighted 1 − p, which equals cross-entropy against the soft label.</p>
+    <h2>8 steps · about 2.5 minutes · no local GPU</h2>
+    <p>Thinking off; prompt weight 0; train only the answer token. Soft label p → Yes row weighted p + No row weighted 1 − p.</p>
     <div class="table-wrap">
       <table>
         <tbody>
           <tr><th>Base model</th><td><code>Qwen/Qwen3.6-35B-A3B-FP8</code>, frozen</td></tr>
-          <tr><th>Adapter</th><td>LoRA rank 8 on attention + MLP, plus <code>train_unembed=True</code> so the Yes/No readout adapts like Open-Jev's head</td></tr>
-          <tr><th>Loss</th><td><code>cross_entropy</code> on the one answer token</td></tr>
-          <tr><th>Schedule</th><td>208 rows × 3 = 624 rows, 8 <code>train_step</code> calls of 78 rows, lr 2e-4, grad clip 1.0</td></tr>
-          <tr><th>Wall time</th><td class="num">149 s of training</td></tr>
+          <tr><th>Adapter</th><td>LoRA rank 8: attention + MLP; <code>train_unembed=True</code></td></tr>
+          <tr><th>Loss</th><td><code>cross_entropy</code></td></tr>
+          <tr><th>Schedule</th><td>208 × 3 = 624 rows; 8 steps; 78 rows/step; lr 2e-4; grad clip 1.0</td></tr>
+          <tr><th>Wall time</th><td class="num">149 s</td></tr>
           <tr><th>Checkpoint</th><td><code>river://…/sampler_weights/floodgate-personal-v1</code></td></tr>
         </tbody>
       </table>
     </div>
     <pre>client  = river.Client(api_key=RIVER_API_KEY)
 session = client.session(project="floodgate-personal-v1")
-base    = session.sample(prompts, base_model=BASE, max_tokens=1, logprobs=20)   # score untrained
+base    = session.sample(prompts, base_model=BASE, max_tokens=1, logprobs=20)
 model   = session.create_model(BASE, river.LoraConfig(rank=8, train_unembed=True))
 model.train_step(rows, lr=2e-4, loss_fn="cross_entropy", grad_clip_norm=1.0)  # × 8
-mine    = model.sample(prompts, max_tokens=1, logprobs=20)                      # score trained
+mine    = model.sample(prompts, max_tokens=1, logprobs=20)
 ckpt    = model.save_weights("floodgate-personal-v1", mode="inference")
 serve   = session.sample(prompts, base_model=BASE, checkpoint=ckpt.path, max_tokens=1, logprobs=20)</pre>
   </section>
 
   <section>
     <div class="eyebrow">Results</div>
-    <h2>It learned where this person's work ends</h2>
+    <h2>Agreement improves; decisions follow the task</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>On 65 held-out rows</th><th class="num">Agreement with the person's labels</th><th class="num">Brier (lower is better)</th></tr></thead>
+        <thead><tr><th>65 held-out rows</th><th class="num">Agreement</th><th class="num">Brier ↓</th></tr></thead>
         <tbody>
-          <tr><td>Untrained base</td><td class="num">66–69%</td><td class="num">0.160</td></tr>
-          <tr><td>floodgate-personal-v1</td><td class="num"><b>77–80%</b></td><td class="num"><b>0.056</b></td></tr>
+          <tr><td>Base</td><td class="num">66–69%</td><td class="num">0.160</td></tr>
+          <tr><td>Trained</td><td class="num"><b>77–80%</b></td><td class="num"><b>0.056</b></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">Ranges: 80.0% / 69.2% on live weights during training, 76.9% / 66.2% re-measured through the saved checkpoint. The difference is two rows out of 65.</p>
+    <p class="note">Trained/base: live 80.0% / 69.2%; saved 76.9% / 66.2% (two-row difference).</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Same page, two tasks (live)</th><th class="num">Building Floodgate</th><th class="num">Evening wind-down</th></tr></thead>
+        <thead><tr><th>P(distraction), live</th><th class="num">Building Floodgate</th><th class="num">Wind-down</th></tr></thead>
         <tbody>
-          <tr><td>A webcomic chapter</td><td class="num">0.96, blocked</td><td class="num">0.13, allowed</td></tr>
-          <tr><td>A classic chess game video</td><td class="num">0.94, blocked</td><td class="num">0.17, allowed</td></tr>
+          <tr><td>Webcomic</td><td class="num">0.96, blocked</td><td class="num">0.13, allowed</td></tr>
+          <tr><td>Chess video</td><td class="num">0.94, blocked</td><td class="num">0.17, allowed</td></tr>
         </tbody>
       </table>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Should I send this to Aditya?</th><th class="num">Relevant</th><th class="num">New</th><th class="num">Timely</th><th class="num">Fits</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Send to Aditya?</th><th class="num">Relevant</th><th class="num">New</th><th class="num">Timely</th><th class="num">Fits</th><th>Verdict</th></tr></thead>
         <tbody>
-          <tr><td>SemIf: Jev-style decisions in the browser, no server</td><td class="num">0.92</td><td class="num">0.78</td><td class="num">0.89</td><td class="num">0.91</td><td><span class="v send">SEND</span></td></tr>
-          <tr><td>Open-Jev, which he already builds on</td><td class="num">0.96</td><td class="num">0.13</td><td class="num">0.89</td><td class="num">0.87</td><td><span class="v hold">HOLD</span></td></tr>
+          <tr><td>SemIf</td><td class="num">0.92</td><td class="num">0.78</td><td class="num">0.89</td><td class="num">0.91</td><td><span class="v send">SEND</span></td></tr>
+          <tr><td>Open-Jev (he already builds on it)</td><td class="num">0.96</td><td class="num">0.13</td><td class="num">0.89</td><td class="num">0.87</td><td><span class="v hold">HOLD</span></td></tr>
           <tr><td>Celebrity wedding dresses</td><td class="num">0.05</td><td class="num">0.84</td><td class="num">0.07</td><td class="num">0.35</td><td><span class="v dont">DON'T SEND</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p>The fine-tune generalised beyond its prompt wording: asked in SemIf's letter format ("A. No / B. Yes") instead of the Yes/No format it was trained on, the same checkpoint scores the same 76.9%.</p>
-    <p>The checkpoint is served behind a Jev-compatible <code>/v1/systemone</code> endpoint and used by the Floodgate Chrome extension and by agents in our QM workspace.</p>
+    <p>SemIf letter format ("A. No / B. Yes"): also 76.9%.</p>
+    <p>Jev-compatible <code>/v1/systemone</code> serves the Chrome extension and QM agents.</p>
   </section>
 
   <section>
     <div class="eyebrow">For the River team</div>
-    <h2>What would make this better on River</h2>
+    <h2>Five asks</h2>
     <ul class="asks">
-      <li><strong>Exact logprobs for chosen tokens</strong><span>Returned logprobs are rounded coarsely (we saw "Yes" −0.63, "No" −1.00), so untrained scores cluster. A way to request exact logprobs for a list of token ids at one position would make every classifier like this cleaner and cheaper than top-20.</span></li>
-      <li><strong>Custom loss or a scalar head</strong><span>Open-Jev trains with candidate NLL plus a Brier term on a separate head. With cross-entropy only, we calibrate afterwards with a temperature. A Brier or softmax-over-candidates loss would close that gap.</span></li>
-      <li><strong>Sharing a checkpoint</strong><span>A teammate's River key gets <code>Checkpoint not found</code> for our checkpoint, so everyone reaches the model through one laptop. Granting another key access, or a small deployment on personal keys, would let a team share one personal model.</span></li>
-      <li><strong>Latency for gating</strong><span>About 4–8 s per decision on the shared pool is fine for a demo, but a browser gate wants under 1 s. A low-latency path for <code>max_tokens=1</code> scoring would unlock real-time use.</span></li>
-      <li><strong>Docs</strong><span>State the minimum Python version (3.9 has no wheel), document <code>chat_template_kwargs={"enable_thinking": False}</code> on <code>chat_complete</code>, and note that losses are summed over tokens.</span></li>
+      <li><strong>Exact token logprobs</strong><span>Expose chosen-token precision beyond rounded Yes −0.63 / No −1.00.</span></li>
+      <li><strong>Custom loss / scalar head</strong><span>Support Brier or candidate-softmax loss alongside cross-entropy.</span></li>
+      <li><strong>Checkpoint sharing</strong><span>Allow teammate keys to load checkpoints without <code>Checkpoint not found</code>.</span></li>
+      <li><strong>Gating latency</strong><span>Reduce 4–8 s to under 1 s for <code>max_tokens=1</code>.</span></li>
+      <li><strong>Docs</strong><span>Document minimum Python (3.9 lacks wheels), <code>chat_complete</code>'s <code>chat_template_kwargs={"enable_thinking": False}</code>, and token-summed losses.</span></li>
     </ul>
   </section>
 
   <footer>
-    <div>Built in one afternoon at the Own Your Intelligence Hackathon. Design credit: <a href="https://github.com/Zefan-Cai/Open-Jev">Open-Jev</a> (Zefan Cai) and <a href="https://github.com/TheoLeeCJ/SemIf-OpenJev">SemIf</a>; interface pattern from TypeSafe's Jev.</div>
+    <div>Built in one afternoon at Own Your Intelligence Hackathon. Design: <a href="https://github.com/Zefan-Cai/Open-Jev">Open-Jev</a> (Zefan Cai) and <a href="https://github.com/TheoLeeCJ/SemIf-OpenJev">SemIf</a>; interface: TypeSafe's Jev.</div>
     <div>Code and model cards: <a href="https://github.com/cyu60/floodgate">github.com/cyu60/floodgate</a></div>
   </footer>
 </main>
+</body>
+</html>
