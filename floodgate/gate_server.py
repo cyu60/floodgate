@@ -21,11 +21,12 @@ from transformers import AutoTokenizer
 
 from floodgate import BASE_MODEL, client
 from floodgate.open_jev.core import compile_request, softmax
+from floodgate.open_jev.letters import score_letters
 from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 LOG = Path(__file__).resolve().parent.parent / "data" / "gate_log.jsonl"
 QUESTION = "Is this page a distraction from the stated task?"
-STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "profile": "", "base_model": BASE_MODEL, "use_about_me": False}
+STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "profile": "", "base_model": BASE_MODEL, "use_about_me": False, "letters": False}
 CACHE: dict[tuple, tuple[float, float]] = {}
 LOCK = threading.Lock()
 
@@ -45,7 +46,9 @@ def decide(session, tok, url: str, title: str, task: str | None = None, about_me
             state += f" About me: {about_me[:300]}."
         recs = compile_request(state, {"distraction": {"type": "noul", "instructions": QUESTION}})
         with LOCK:
-            logits = score_records(recs, Renderer(tok), session_sampler(session, BASE_MODEL, STATE["checkpoint"]))
+            sampler = session_sampler(session, BASE_MODEL, STATE["checkpoint"])
+            # letter-readout checkpoints (train_letters.py) are asked "A. No / B. Yes", others the per-candidate Yes/No prompt
+            logits = score_letters(recs, tok, sampler) if STATE["letters"] else score_records(recs, Renderer(tok), sampler)
         p = softmax(logits[0], STATE["temperature"])[1]
         CACHE[key] = (p, now)
     return {"p": round(p, 3), "lock": p >= STATE["threshold"], "task": task}
@@ -79,6 +82,7 @@ def make_handler(session, tok):
             if self.path == "/model":  # load a shared model card's checkpoint without restarting
                 STATE["checkpoint"] = body.get("checkpoint") or None
                 STATE["temperature"] = float(body.get("temperature") or 1.0)
+                STATE["letters"] = body.get("method") == "semif-letters"
                 CACHE.clear()
                 return self._json(200, {"checkpoint": STATE["checkpoint"], "temperature": STATE["temperature"]})
             if self.path == "/override":  # user says the decision was wrong -> training row
@@ -109,10 +113,12 @@ def main():
     ap.add_argument("--run", help="a model card (models/*.json) or data/runs/*.json: uses its checkpoint + temperature")
     ap.add_argument("--use-about-me", action="store_true", help="append the extension's 'about me' to the state (off by default: personal models were trained without it)")
     a = ap.parse_args()
+    letters = False
     if a.run:
         info = json.load(open(a.run))
         a.checkpoint, a.temperature = info["checkpoint"], info["temperature"]
-    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature, use_about_me=a.use_about_me)
+        letters = info.get("method") == "semif-letters"
+    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature, use_about_me=a.use_about_me, letters=letters)
     tok = AutoTokenizer.from_pretrained(BASE_MODEL)
     with client().session(project="floodgate") as session:
         print(f"Floodgate on http://127.0.0.1:{a.port}  task={a.task!r} threshold={a.threshold} ckpt={a.checkpoint}")

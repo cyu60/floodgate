@@ -16,6 +16,7 @@ from transformers import AutoTokenizer
 
 from floodgate import BASE_MODEL, client
 from floodgate.open_jev.core import compile_request, format_response, softmax
+from floodgate.open_jev.letters import score_letters
 from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 
@@ -25,18 +26,38 @@ def main():
     ap.add_argument("--checkpoint")
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--run", help="data/runs/*.json from train.py: reads checkpoint + temperature")
+    ap.add_argument("--noul-run", help="letter-readout run card (models/semif-*.json from train_letters.py): answers yes/no questions")
     ap.add_argument("--port", type=int, default=8791)
     ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to serve beyond this machine (set FLOODGATE_TOKEN first)")
     a = ap.parse_args()
     if a.run:
         info = json.load(open(a.run))
         a.checkpoint, a.temperature = info["checkpoint"], info["temperature"]
+    noul = json.load(open(a.noul_run)) if a.noul_run else None
     tok = AutoTokenizer.from_pretrained(a.base)
     r = Renderer(tok)
     model_name = "open-jev-river" + ("" if a.checkpoint else "-base")
 
     with client().session(project="open-jev-server") as session:
         sampler = session_sampler(session, a.base, a.checkpoint)
+        noul_sampler = session_sampler(session, a.base, noul["checkpoint"]) if noul else None
+
+        def probs(recs):
+            """Yes/no questions go to the letter-readout model when given; everything else to the main checkpoint."""
+            route = [bool(noul) and x["kind"] == "noul" for x in recs]
+            out = [None] * len(recs)
+            for use_letters in (False, True):
+                idx = [i for i, u in enumerate(route) if u == use_letters]
+                if not idx:
+                    continue
+                sub = [recs[i] for i in idx]
+                if use_letters:
+                    logits, T = score_letters(sub, tok, noul_sampler), noul["temperature"]
+                else:
+                    logits, T = score_records(sub, r, sampler), a.temperature
+                for i, l in zip(idx, logits):
+                    out[i] = softmax(l, T)
+            return out
 
         class H(BaseHTTPRequestHandler):
             def _send(self, code, body):
@@ -53,7 +74,10 @@ def main():
                 self._send(204, {})
 
             def do_GET(self):
-                self._send(200, {"models": [{"name": model_name, "checkpoint": a.checkpoint, "temperature": a.temperature}]})
+                models = [{"name": model_name, "checkpoint": a.checkpoint, "temperature": a.temperature}]
+                if noul:
+                    models.append({"name": noul["name"], "checkpoint": noul["checkpoint"], "temperature": noul["temperature"], "answers": "noul"})
+                self._send(200, {"models": models})
 
             def do_POST(self):
                 need = os.environ.get("FLOODGATE_TOKEN")
@@ -65,8 +89,7 @@ def main():
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                     t0 = time.time()
                     recs = compile_request(body.get("state"), body.get("questions"))
-                    logits = score_records(recs, r, sampler)
-                    out = format_response(recs, [softmax(l, a.temperature) for l in logits])
+                    out = format_response(recs, probs(recs))
                     prompts = sum(1 if x["kind"] == "noul" else len(x["options"]) for x in recs)
                     out.update(model=model_name, checkpoint=a.checkpoint, usage={"candidate_prompts": prompts, "latency_ms": int((time.time() - t0) * 1000)})
                     self._send(200, out)
@@ -76,7 +99,7 @@ def main():
             def log_message(self, *args):
                 pass
 
-        print(f"open-jev on River: http://127.0.0.1:{a.port}/v1/systemone  model={model_name} T={a.temperature}")
+        print(f"open-jev on River: http://127.0.0.1:{a.port}/v1/systemone  model={model_name} T={a.temperature}" + (f"  yes/no -> {noul['name']} T={noul['temperature']:.2f}" if noul else ""))
         ThreadingHTTPServer((a.host, a.port), H).serve_forever()
 
 
