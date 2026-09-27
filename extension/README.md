@@ -22,7 +22,8 @@ Open the Floodgate popup → **Dashboard → Model**, pick a provider and click 
 
 | Provider | Start it with | Use it for |
 |---|---|---|
-| **River open Jev (gate server)** | `python -m floodgate.gate_server --run models/open-jev-river-v1.json` (port 8790) | The real thing: the team's model, trained on River (86% on Open-Jev test) |
+| **Your personal model (gate server)** | `python -m floodgate.gate_server --run models/floodgate-personal-v1.json` (port 8790) | The real thing: trained on River on your own browsing, 77–80% agreement on held-out personal pages. Runs on the machine whose River key trained it |
+| River open Jev, public data | `python -m floodgate.gate_server --run models/open-jev-river-v1.json` (port 8790) | The general model trained on Open-Jev's public data |
 | same, mocked | `python3 tools/mock_gate.py` (same API, no River or venv, ~1.5 s fake latency) | Building and demoing before the River model is up |
 | **Jev-compatible endpoint** | `python -m floodgate.open_jev.server --run data/runs/<run>.json` (port 8791) | Any `/v1/systemone` server; also TypeSafe's hosted Jev as a baseline (API key + model `jev-latest`) |
 | **Offline heuristic** | built in | Default, and the fallback whenever the model can't be reached |

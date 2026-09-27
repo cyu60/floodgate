@@ -25,7 +25,7 @@ from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 LOG = Path(__file__).resolve().parent.parent / "data" / "gate_log.jsonl"
 QUESTION = "Is this page a distraction from the stated task?"
-STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "profile": "", "base_model": BASE_MODEL}
+STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "profile": "", "base_model": BASE_MODEL, "use_about_me": False}
 CACHE: dict[tuple, tuple[float, float]] = {}
 LOCK = threading.Lock()
 
@@ -38,9 +38,11 @@ def decide(session, tok, url: str, title: str, task: str | None = None, about_me
     if key in CACHE and now - CACHE[key][1] < 600:
         p = CACHE[key][0]
     else:
-        state = {"url": url[:300], "title": title[:160], "time": f"{datetime.now():%H:%M %A}", "stated_task": task}
-        if about_me:
-            state["about_me"] = about_me[:300]
+        # Same text line the training rows use (prep_gate_dataset / label tool / train_personal), so a model
+        # fine-tuned on personal rows sees at serve time exactly the format it was trained on.
+        state = f"URL: {url[:200]} Title: {title[:120]}. Time: {datetime.now():%H:%M %A}. Stated task: {task}."
+        if about_me and STATE.get("use_about_me"):
+            state += f" About me: {about_me[:300]}."
         recs = compile_request(state, {"distraction": {"type": "noul", "instructions": QUESTION}})
         with LOCK:
             logits = score_records(recs, Renderer(tok), session_sampler(session, BASE_MODEL, STATE["checkpoint"]))
@@ -104,12 +106,13 @@ def main():
     ap.add_argument("--checkpoint")
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--port", type=int, default=8790)
-    ap.add_argument("--run", help="data/runs/*.json from open_jev.train: uses its checkpoint + temperature")
+    ap.add_argument("--run", help="a model card (models/*.json) or data/runs/*.json: uses its checkpoint + temperature")
+    ap.add_argument("--use-about-me", action="store_true", help="append the extension's 'about me' to the state (off by default: personal models were trained without it)")
     a = ap.parse_args()
     if a.run:
         info = json.load(open(a.run))
         a.checkpoint, a.temperature = info["checkpoint"], info["temperature"]
-    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature)
+    STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature, use_about_me=a.use_about_me)
     tok = AutoTokenizer.from_pretrained(BASE_MODEL)
     with client().session(project="floodgate") as session:
         print(f"Floodgate on http://127.0.0.1:{a.port}  task={a.task!r} threshold={a.threshold} ckpt={a.checkpoint}")
