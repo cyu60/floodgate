@@ -11,7 +11,7 @@ from floodgate.open_jev.core import fit_temperature, metrics
 from floodgate.open_jev.letters import letter_datums, score_letters
 from floodgate.open_jev.scorer import model_sampler
 
-DATA = Path("/Users/china/codeDev/river-ai/data/openjev")
+DATA = Path(__file__).resolve().parents[2] / "data" / "openjev"
 
 
 def rep(name, logits, rows, T):
