@@ -60,10 +60,14 @@ def main():
     ap.add_argument("--max-options", type=int, default=8)
     ap.add_argument("--max-state", type=int, default=2500)
     ap.add_argument("--seed", type=int, default=20260927)
+    ap.add_argument("--only", nargs="+", choices=["train", "cal", "test", "ood"],
+                    help="rewrite only these splits (e.g. --only train to grow the training set and keep the eval splits)")
     a = ap.parse_args()
     rng = random.Random(a.seed)
     OUT.mkdir(parents=True, exist_ok=True)
     for split, name, n in (("train", "train", a.train), ("calibration", "cal", a.cal), ("test", "test", a.test), ("ood", "ood", a.ood)):
+        if a.only and name not in a.only:
+            continue
         rows = [r for r in load_split(split) if usable(r, a.max_options, a.max_state)]
         sample = [to_record(r) for r in stratified(rows, n, rng)]
         with open(OUT / f"{name}.jsonl", "w") as f:
