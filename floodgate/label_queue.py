@@ -1,12 +1,12 @@
-"""Habitect Gate label queue: the AMBIGUOUS visits the seed rules cannot judge, one card per URL.
+"""Floodgate label queue: the AMBIGUOUS visits the seed rules cannot judge, one card per URL.
 
 Seed rules (prep_gate_dataset) only know ~15 domains. Everything else — google searches, Wikipedia,
 YouTube titles that might be lectures, vercel previews, blogs, course sites — is where the model
 has to learn the user's judgment rather than a domain list. This builds that queue for tools/label.html.
 
-  python -m habitect_gate.label_queue                    # -> data/label_queue.json (ambiguous only)
-  python -m habitect_gate.label_queue --include-known    # also sample rule-labelled domains for checking
-  python -m habitect_gate.label_queue --merge            # hand labels override seed rows -> data/gate_train.jsonl
+  python -m floodgate.label_queue                    # -> data/label_queue.json (ambiguous only)
+  python -m floodgate.label_queue --include-known    # also sample rule-labelled domains for checking
+  python -m floodgate.label_queue --merge            # hand labels override seed rows -> data/gate_train.jsonl
 
 Buckets (label these in order — each is a different kind of ambiguity):
   unknown   domain the rules have never seen (largest bucket, highest value)
@@ -20,7 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from habitect_gate.prep_gate_dataset import HISTORY, OUT, QUESTION, domain, load_visits, seed_label
+from floodgate.prep_gate_dataset import HISTORY, OUT, QUESTION, domain, load_visits, seed_label
 
 CONTENT = {"youtube.com", "m.youtube.com", "en.wikipedia.org", "reddit.com", "x.com", "twitter.com"}
 SKIP = {"", "accounts.google.com", "localhost", "127.0.0.1", "newtab", "chrome", "chrome-extension", "about"}
@@ -108,7 +108,7 @@ def main():
     ap.add_argument("--include-known", action="store_true")
     ap.add_argument("--per-domain", type=int, default=20, help="max cards per ambiguous domain (label the rest with a domain-wide label in the UI)")
     ap.add_argument("--known-sample", type=int, default=5)
-    ap.add_argument("--tasks", nargs="+", default=["deep work on the current project", "prep the River dataset script", "build Habitect Gate at the River hackathon", "rest / evening wind-down"])
+    ap.add_argument("--tasks", nargs="+", default=["deep work on the current project", "prep the River dataset script", "build Floodgate at the River hackathon", "rest / evening wind-down"])
     a = ap.parse_args()
     merge(a) if a.merge else build(a)
 

@@ -4,12 +4,12 @@ Gotcha (verified 2026-09-22): Qwen reasoning models spend the whole max_tokens b
 inside <think> by default. Passing chat_template_kwargs={"enable_thinking": False}
 through chat_complete's kwargs fixes it (1 completion token for "pong").
 
-Usage: python -m habitect_gate.chat "your prompt" [--think]
+Usage: python -m floodgate.chat "your prompt" [--think]
 """
 import argparse
 import json
 
-from habitect_gate import BASE_MODEL, NO_THINK, client
+from floodgate import BASE_MODEL, NO_THINK, client
 
 
 def ask(prompt: str, base_model: str = BASE_MODEL, think: bool = False, max_tokens: int = 400) -> dict:

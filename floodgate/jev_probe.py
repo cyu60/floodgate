@@ -6,15 +6,15 @@ i.e. the Yes/No logit difference. River exposes that directly: sample max_tokens
 with logprobs=K and read the two tokens. Verified 2026-09-23 on the untrained base:
 manga page at 23:40 -> 0.915 distraction, River docs at 10:15 -> 0.294, batch of 3 in 5.6 s.
 
-  python -m habitect_gate.jev_probe                       # runs the three demo cases
-  python -m habitect_gate.jev_probe --checkpoint river://…  # same, through a trained LoRA
+  python -m floodgate.jev_probe                       # runs the three demo cases
+  python -m floodgate.jev_probe --checkpoint river://…  # same, through a trained LoRA
 """
 import argparse
 import math
 
 from transformers import AutoTokenizer
 
-from habitect_gate import BASE_MODEL, client
+from floodgate import BASE_MODEL, client
 
 SYSTEM = "You are a decision model. Answer with exactly one word: Yes or No."
 

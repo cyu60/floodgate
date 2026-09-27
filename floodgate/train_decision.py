@@ -9,8 +9,8 @@ Open-Jev trains LoRA + a scalar head (init = lm_head[Yes]-lm_head[No]) with cand
   * calibration temperature fit in code afterwards on held-out rows (see jev_probe.noul)
 Reads Open-Jev-style rows: {state, question, kind:"noul", target:[p_no, p_yes]}.
 
-  python -m habitect_gate.train_decision --data data/gate_rows.jsonl --dry-run
-  python -m habitect_gate.train_decision --data data/gate_rows.jsonl --steps 30 --name habitect-gate-v1
+  python -m floodgate.train_decision --data data/gate_rows.jsonl --dry-run
+  python -m floodgate.train_decision --data data/gate_rows.jsonl --steps 30 --name floodgate-v1
 """
 import argparse
 import json
@@ -20,8 +20,8 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from habitect_gate import BASE_MODEL, client
-from habitect_gate.jev_probe import noul, render
+from floodgate import BASE_MODEL, client
+from floodgate.jev_probe import noul, render
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -51,7 +51,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(DATA / "gate_rows.jsonl"))
     ap.add_argument("--base", default=BASE_MODEL)
-    ap.add_argument("--name", default="habitect-gate")
+    ap.add_argument("--name", default="floodgate")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--steps", type=int, default=30)

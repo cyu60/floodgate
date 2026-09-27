@@ -1,4 +1,4 @@
-"""Habitect Gate dataset: Chrome history -> noul rows "Is this page a distraction from the stated task?"
+"""Floodgate dataset: Chrome history -> noul rows "Is this page a distraction from the stated task?"
 
 Reads the local Chrome History SQLite (copied first; Chrome locks the live file) and emits
 Open-Jev-style rows: {state, question, kind: "noul", options: ["no","yes"], target: [1-p, p]}.
@@ -7,8 +7,8 @@ Labels are SEED labels from domain rules + hour-of-day, meant to be overwritten 
 (Jev via the MentorMates proxy once it is live, or Claude) and by your own corrections in
 gbrain. Rule labels alone will teach the model your rules, not your judgment.
 
-  python -m habitect_gate.prep_gate_dataset --stated-task "deep work"     # writes data/gate_rows.jsonl
-  python -m habitect_gate.prep_gate_dataset --stats                        # domain histogram only
+  python -m floodgate.prep_gate_dataset --stated-task "deep work"     # writes data/gate_rows.jsonl
+  python -m floodgate.prep_gate_dataset --stats                        # domain histogram only
 """
 import argparse
 import json

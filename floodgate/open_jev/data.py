@@ -2,7 +2,7 @@
 small stratified JSONL splits sized for a River run. Rows keep Open-Jev's schema:
 {id, source, kind, state, question, options, target}.
 
-  python -m habitect_gate.open_jev.data --train 1200 --cal 150 --test 240 --ood 120
+  python -m floodgate.open_jev.data --train 1200 --cal 150 --test 240 --ood 120
 """
 import argparse
 import collections

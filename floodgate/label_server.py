@@ -1,6 +1,6 @@
 """Serve tools/label.html and persist labels straight into data/gate_labels.jsonl (no download step).
 
-  python -m habitect_gate.label_server            # http://127.0.0.1:8765
+  python -m floodgate.label_server            # http://127.0.0.1:8765
   GET  /            -> tools/label.html
   GET  /queue       -> data/label_queue.json
   GET  /labels      -> data/gate_labels.jsonl as a JSON array (resume)
@@ -31,7 +31,7 @@ class H(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
         if self.path == "/queue":
-            return self._send(200, QUEUE.read_bytes()) if QUEUE.exists() else self._send(404, b'{"error":"run python -m habitect_gate.label_queue first"}')
+            return self._send(200, QUEUE.read_bytes()) if QUEUE.exists() else self._send(404, b'{"error":"run python -m floodgate.label_queue first"}')
         if self.path == "/labels":
             rows = [json.loads(l) for l in LABELS.read_text().splitlines() if l.strip()] if LABELS.exists() else []
             return self._send(200, json.dumps(rows, ensure_ascii=False).encode())

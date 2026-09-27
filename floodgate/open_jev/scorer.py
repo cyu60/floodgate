@@ -4,7 +4,7 @@ That difference equals logit(Yes) - logit(No), which is exactly how Open-Jev ini
 decision head (lm_head[Yes] - lm_head[No] on the last hidden state). So the untrained base on
 River is Open-Jev at step 0, and LoRA training (with train_unembed) moves the same quantity.
 """
-from habitect_gate.open_jev.core import candidate_prompts, record_logits
+from floodgate.open_jev.core import candidate_prompts, record_logits
 
 TOP_K = 20
 

@@ -1,7 +1,7 @@
-"""Habitect Gate server: the Chrome extension posts {url, title} per navigation; we answer
+"""Floodgate server: the Chrome extension posts {url, title} per navigation; we answer
 {"p": P(distraction), "lock": bool} from the River noul probe (base model or a trained checkpoint).
 
-  python -m habitect_gate.gate_server --task "prep River dataset" [--checkpoint river://…] [--threshold 0.7]
+  python -m floodgate.gate_server --task "prep River dataset" [--checkpoint river://…] [--threshold 0.7]
 
 Stdlib only. Keeps one River session open; decisions and overrides are appended to
 data/gate_log.jsonl so every override becomes a training row.
@@ -16,9 +16,9 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from habitect_gate import BASE_MODEL, client
-from habitect_gate.open_jev.core import compile_request, softmax
-from habitect_gate.open_jev.scorer import Renderer, score_records, session_sampler
+from floodgate import BASE_MODEL, client
+from floodgate.open_jev.core import compile_request, softmax
+from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 LOG = Path(__file__).resolve().parent.parent / "data" / "gate_log.jsonl"
 QUESTION = "Is this page a distraction from the stated task?"
@@ -98,8 +98,8 @@ def main():
         a.checkpoint, a.temperature = info["checkpoint"], info["temperature"]
     STATE.update(task=a.task, threshold=a.threshold, checkpoint=a.checkpoint, temperature=a.temperature)
     tok = AutoTokenizer.from_pretrained(BASE_MODEL)
-    with client().session(project="habitect-gate") as session:
-        print(f"habitect gate on http://127.0.0.1:{a.port}  task={a.task!r} threshold={a.threshold} ckpt={a.checkpoint}")
+    with client().session(project="floodgate") as session:
+        print(f"Floodgate on http://127.0.0.1:{a.port}  task={a.task!r} threshold={a.threshold} ckpt={a.checkpoint}")
         HTTPServer(("127.0.0.1", a.port), make_handler(session, tok)).serve_forever()
 
 

@@ -1,5 +1,5 @@
 <!doctype html><meta charset="utf-8"><style>body{font:14px -apple-system,system-ui;width:280px;padding:12px}input{width:100%;box-sizing:border-box;padding:6px}button{margin-top:8px;padding:6px 10px}</style>
-<b>Habitect Gate</b><p>Stated task</p><input id="task"><button id="save">Set task</button>
+<b>Floodgate</b><p>Stated task</p><input id="task"><button id="save">Set task</button>
 <p id="last" style="color:#555"></p>
 <script>
 chrome.storage.local.get("last",({last})=>{if(last)document.getElementById("last").textContent=`last: ${Math.round(last.p*100)}% ${last.lock?"LOCK":"ok"} · ${last.ms} ms · ${last.title||last.url}`});

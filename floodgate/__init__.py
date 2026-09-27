@@ -1,4 +1,4 @@
-"""Habitect Gate: an open Jev on River AI. Shared config."""
+"""Floodgate: an open Jev on River AI. Shared config."""
 import os
 
 BASE_MODEL = os.environ.get("RIVER_BASE_MODEL", "Qwen/Qwen3.6-35B-A3B-FP8")

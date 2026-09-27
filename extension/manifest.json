@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Habitect Gate",
+  "name": "Floodgate",
   "version": "0.1.0",
   "description": "Asks a River-trained open Jev whether the page you just opened is a distraction from your stated task, and locks it if so.",
   "permissions": ["tabs", "storage", "webNavigation"],

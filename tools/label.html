@@ -67,7 +67,7 @@
 </head>
 <body>
 <header>
-  <h1>Habitect Gate · label</h1>
+  <h1>Floodgate · label</h1>
   <div class="progress"><i id="bar"></i></div>
   <span class="stat" id="stat">loading…</span>
   <button id="export" title="download gate_labels.jsonl">Export .jsonl</button>
@@ -241,7 +241,7 @@ document.addEventListener("keydown", (e) => {
 
 (async function init() {
   try { Q = await (await fetch("/queue")).json(); }
-  catch { $("#card").innerHTML = `<div class="done">Could not load /queue. Run:<br><code>python -m habitect_gate.label_queue && python -m habitect_gate.label_server</code></div>`; return; }
+  catch { $("#card").innerHTML = `<div class="done">Could not load /queue. Run:<br><code>python -m floodgate.label_queue && python -m floodgate.label_server</code></div>`; return; }
   $("#taskSel").innerHTML = Q.stated_tasks.map(t => `<option>${esc(t)}</option>`).join("");
   let prior = [];
   try { prior = await (await fetch("/labels")).json(); } catch {}

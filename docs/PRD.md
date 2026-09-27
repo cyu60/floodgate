@@ -1,4 +1,4 @@
-# PRD — Habitect Gate: an open Jev, trained on River, that guards your attention
+# PRD — Floodgate: an open Jev, trained on River, that guards your attention
 
 *Own Your Intelligence Hackathon · YC HQ · Sep 27, 2026. Own your intelligence, literally: the model that judges your attention is yours, trained on your overrides.*
 
@@ -30,17 +30,17 @@ A browser gate that asks a small, calibrated decision model "is this page a dist
 
 ### In (hackathon v1)
 
-1. **Open Jev on River** (`habitect_gate/open_jev/`)
+1. **Open Jev on River** (`floodgate/open_jev/`)
    - Port of Open-Jev's request compiler, candidate prompts and typed response formatter (noul / choice / score, confidence, legend). Byte-compatible with Jev's `POST /v1/systemone`.
    - Scorer: Yes/No logprob gap per candidate via River sampling (base, live training weights, or saved checkpoint).
    - Trainer: LoRA r8 + `train_unembed`, one Yes/No target token per candidate, soft targets as weights, each record weighted 1; calibration temperature fitted on a held-out split; base vs trained eval on test + OOD.
    - Data: stratified sample of Open-Jev's public v1.1 corpus (1,164 train / 140 cal / 228 test / 115 OOD, 18 task families).
    - Server: Jev-compatible `/v1/systemone` backed by a River checkpoint.
-2. **Habitect Gate** (`extension/` + `habitect_gate/gate_server.py`)
+2. **Floodgate browser gate** (`extension/` + `floodgate/gate_server.py`)
    - Chrome MV3 extension: on each top-frame navigation, POST `{url, title}` to the local gate; lock page if P(distraction) ≥ threshold; popup to set the stated task.
    - Gate asks one noul over `{url, title, time, stated_task}` through the Open-Jev scorer; caches per URL; logs every decision.
    - "This is on task" button on the lock page logs an override as a training row.
-3. **Labelling loop** (`habitect_gate/label_queue.py`, `label_server.py`, `tools/label.html`): queue ambiguous visits, keyboard-label them, write Open-Jev-style rows.
+3. **Labelling loop** (`floodgate/label_queue.py`, `label_server.py`, `tools/label.html`): queue ambiguous visits, keyboard-label them, write Open-Jev-style rows.
 
 ### Out (v1)
 

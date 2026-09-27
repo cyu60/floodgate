@@ -9,9 +9,9 @@ NLL + 0.1 Brier, then one calibration temperature. River has no custom head or l
   Brier term        -> dropped (custom losses unsupported)
   calibration       -> same: one temperature fitted on the calibration split
 
-  python -m habitect_gate.open_jev.train --dry-run
-  python -m habitect_gate.open_jev.train --epochs 2 --name open-jev-river-v1
-  python -m habitect_gate.open_jev.train --extra data/gate_rows.jsonl   # opt-in: your own rows
+  python -m floodgate.open_jev.train --dry-run
+  python -m floodgate.open_jev.train --epochs 2 --name open-jev-river-v1
+  python -m floodgate.open_jev.train --extra data/gate_rows.jsonl   # opt-in: your own rows
 """
 import argparse
 import json
@@ -21,9 +21,9 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from habitect_gate import BASE_MODEL, client
-from habitect_gate.open_jev.core import candidate_prompts, fit_temperature, metrics
-from habitect_gate.open_jev.scorer import Renderer, model_sampler, score_records, session_sampler
+from floodgate import BASE_MODEL, client
+from floodgate.open_jev.core import candidate_prompts, fit_temperature, metrics
+from floodgate.open_jev.scorer import Renderer, model_sampler, score_records, session_sampler
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 

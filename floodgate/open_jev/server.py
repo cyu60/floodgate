@@ -1,9 +1,9 @@
 """Jev-compatible HTTP endpoint backed by River: POST /v1/systemone with {state, questions}.
 Same body and response shape as api.typesafe.ai/v1/systemone, so the MentorMates proxy, the Jev
-SDKs' request format, and the habitect gate can all point at it.
+SDKs' request format, and the Floodgate can all point at it.
 
-  python -m habitect_gate.open_jev.server --checkpoint river://... --temperature 1.7
-  python -m habitect_gate.open_jev.server            # untrained base = Open-Jev at step 0
+  python -m floodgate.open_jev.server --checkpoint river://... --temperature 1.7
+  python -m floodgate.open_jev.server            # untrained base = Open-Jev at step 0
   curl -s localhost:8791/v1/systemone -d '{"state":"...","questions":{"q":{"type":"noul","instructions":"..."}}}'
 """
 import argparse
@@ -13,9 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from transformers import AutoTokenizer
 
-from habitect_gate import BASE_MODEL, client
-from habitect_gate.open_jev.core import compile_request, format_response, softmax
-from habitect_gate.open_jev.scorer import Renderer, score_records, session_sampler
+from floodgate import BASE_MODEL, client
+from floodgate.open_jev.core import compile_request, format_response, softmax
+from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 
 def main():
