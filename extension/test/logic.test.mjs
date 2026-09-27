@@ -114,3 +114,11 @@ test("the repo's River model cards (models/*.json) import as-is", async () => {
   assert.deepEqual(card.examples, []);
   assert.match(card.description, /River-trained open Jev, \d+(\.\d)?% on Open-Jev test/);
 });
+
+test("the personal model card imports with its held-out agreement", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const text = await readFile(new URL("../../models/floodgate-personal-v1.json", import.meta.url), "utf8");
+  const card = parseCard(text);
+  assert.equal(card.backend.checkpoint, JSON.parse(text).checkpoint);
+  assert.match(card.description, /^Personal model trained on River, 80% agreement on held-out pages \(untrained 69\.2%\)$/);
+});

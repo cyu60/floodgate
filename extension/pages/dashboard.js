@@ -251,67 +251,80 @@ async function renderLabels() {
 }
 
 // ---------------- model ----------------
+// Settings fields + "Test connection" for one provider (decision providers and context providers alike).
+function providerFields(p, s) {
+  if (!p.settings?.length) return null;
+  const cfg = providerConfig(p, s);
+  const msg = el("div", { className: "msg" });
+  const inputs = p.settings.map((f) =>
+    el(
+      "label",
+      {},
+      f.label,
+      el("input", {
+        type: f.type || "text",
+        value: cfg[f.key] ?? "",
+        onchange: async (e) => {
+          const cur = await getSettings();
+          const ps = { ...cur.providerSettings, [p.id]: { ...(cur.providerSettings[p.id] || {}), [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value } };
+          await setSettings({ providerSettings: ps });
+          msg.textContent = "Saved.";
+          msg.className = "msg ok";
+        },
+      }),
+    ),
+  );
+  const test = el(
+    "button",
+    {
+      onclick: async () => {
+        msg.textContent = "Testing…";
+        msg.className = "msg";
+        try {
+          const h = await p.health(providerConfig(p, await getSettings()));
+          msg.textContent = `${h.ok ? "Connected" : "Problem"}: ${h.detail}`;
+          msg.className = `msg ${h.ok ? "ok" : "bad"}`;
+        } catch (e) {
+          msg.textContent = `Can't reach it: ${e.message}`;
+          msg.className = "msg bad";
+        }
+      },
+    },
+    "Test connection",
+  );
+  return el("div", { className: "fields" }, inputs, p.health ? el("div", { className: "inline" }, test) : null, msg);
+}
+
 async function renderModel() {
   const s = await getSettings();
   $("providers").replaceChildren(
-    ...PROVIDERS.filter((p) => p.classify).map((p) => {
-      const cfg = providerConfig(p, s);
-      const msg = el("div", { className: "msg" });
-      const inputs = (p.settings || []).map((f) =>
-        el(
-          "label",
-          {},
-          f.label,
-          el("input", {
-            type: f.type || "text",
-            value: cfg[f.key] ?? "",
-            onchange: async (e) => {
-              const cur = await getSettings();
-              const ps = { ...cur.providerSettings, [p.id]: { ...(cur.providerSettings[p.id] || {}), [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value } };
-              await setSettings({ providerSettings: ps });
-              msg.textContent = "Saved.";
-              msg.className = "msg ok";
-            },
-          }),
-        ),
-      );
-      const test = el(
-        "button",
-        {
-          onclick: async () => {
-            msg.textContent = "Testing…";
-            msg.className = "msg";
-            try {
-              const h = await p.health(providerConfig(p, await getSettings()));
-              msg.textContent = `${h.ok ? "Connected" : "Problem"}: ${h.detail}`;
-              msg.className = `msg ${h.ok ? "ok" : "bad"}`;
-            } catch (e) {
-              msg.textContent = `Can't reach it: ${e.message}`;
-              msg.className = "msg bad";
-            }
-          },
-        },
-        "Test connection",
-      );
-      return el(
+    ...PROVIDERS.filter((p) => p.classify).map((p) =>
+      el(
         "div",
         { className: `card provider ${s.provider === p.id ? "on" : ""}` },
         el("input", { type: "radio", name: "provider", id: `p-${p.id}`, checked: s.provider === p.id, onchange: () => setSettings({ provider: p.id }).then(renderAll) }),
         el("label", { htmlFor: `p-${p.id}` }, el("b", {}, p.name), el("div", { className: "small dim" }, p.description)),
-        p.settings?.length ? el("div", { className: "fields" }, inputs, p.health ? el("div", { className: "inline" }, test) : null, msg) : null,
-      );
-    }),
+        providerFields(p, s),
+      ),
+    ),
   );
 
-  const enrichers = PROVIDERS.filter((p) => p.enrich);
+  // Context / memory providers (GBrain, ...): a toggle plus their own settings, e.g. an endpoint and token.
+  const extras = PROVIDERS.filter((p) => !p.classify && (p.enrich || p.onLabel));
   $("enrichers").replaceChildren(
-    ...(enrichers.length
-      ? enrichers.map((p) =>
+    ...(extras.length
+      ? extras.map((p) =>
           el(
-            "label",
-            { className: "inline", style: "margin-top:6px" },
-            el("input", { type: "checkbox", checked: !!s.enrichers[p.id], onchange: async (e) => setSettings({ enrichers: { ...(await getSettings()).enrichers, [p.id]: e.target.checked } }) }),
-            el("span", {}, el("b", {}, p.name), " ", el("span", { className: "small dim" }, p.description)),
+            "div",
+            { className: `provider ${s.enrichers[p.id] ? "on" : ""}`, style: "margin-top:10px" },
+            el("input", {
+              type: "checkbox",
+              id: `e-${p.id}`,
+              checked: !!s.enrichers[p.id],
+              onchange: async (e) => setSettings({ enrichers: { ...(await getSettings()).enrichers, [p.id]: e.target.checked } }).then(renderModel),
+            }),
+            el("label", { htmlFor: `e-${p.id}` }, el("b", {}, p.name), el("div", { className: "small dim" }, p.description)),
+            providerFields(p, s),
           ),
         )
       : [el("div", { className: "small faint" }, "None installed yet.")]),

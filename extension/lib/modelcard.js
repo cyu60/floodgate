@@ -43,11 +43,18 @@ export function parseCard(text) {
 // A River training run / model card from the repo (models/*.json, data/runs/*.json): checkpoint + temperature + evals.
 function fromRunCard(run) {
   const acc = run.eval?.trained?.test_cal?.accuracy ?? run.eval?.trained?.test?.accuracy;
+  const personal = run.eval?.personal?.agreement; // models/floodgate-personal-*.json: agreement on held-out personal pages
+  const pct = (x) => Math.round(x * 1000) / 10;
   return {
     floodgate_model_card: CARD_VERSION,
     name: run.name || "River model",
     author: run.author || "",
-    description: acc != null ? `River-trained open Jev, ${Math.round(acc * 1000) / 10}% on Open-Jev test` : "River-trained open Jev",
+    description:
+      personal != null
+        ? `Personal model trained on River, ${pct(personal)}% agreement on held-out pages (untrained ${pct(run.eval?.base?.agreement ?? 0)}%)`
+        : acc != null
+          ? `River-trained open Jev, ${pct(acc)}% on Open-Jev test`
+          : "River-trained open Jev",
     backend: { provider: "floodgate-gate", checkpoint: run.checkpoint, temperature: run.temperature ?? 1.0, base_model: run.base || null },
     rules: {},
     examples: [],
