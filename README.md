@@ -14,11 +14,44 @@ In one afternoon at the Own Your Intelligence Hackathon, we went from "can an op
 
 1. **Proved the core idea on River.** Open-Jev's decision head starts as `logit(Yes) − logit(No)`. River returns exactly that from any open model, so an untrained model on River already behaves like Open-Jev at step 0. No GPU, no custom head.
 2. **Ported Open-Jev's System One API** (noul, choice, score, confidence, legend) so requests and responses are byte-compatible with Jev's `POST /v1/systemone`.
-3. **Trained our own open Jev on River**, then **a personal model on the user's own browsing** (69% to 80% agreement on held-out personal pages, where the public model did not help).: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
+3. **Trained our own open Jev on River**, then **a personal model on the user's own browsing** (about 66–69% to 77–80% agreement on held-out personal pages).: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
 4. **Served it as a Jev-compatible API.** The same `curl` that works against TypeSafe's Jev works against our checkpoint.
 5. **Built Floodgate**, a Chrome extension plus local gate. It asks the model "is this page a distraction from my stated task?" on every navigation, locks the page above a threshold, and logs every "this is on task" override as a new training row.
 6. **Benchmarked against real Jev.** Our trained model matches or beats Jev on the obvious calls. Neither model knows where *your* task begins and ends, and that is the gap Floodgate closes with personal training.
 7. **Shipped it in the open**: this repo, a PRD ([docs/PRD.md](docs/PRD.md)), a shareable model card, and an MIT licence crediting Open-Jev.
+
+## Your model: `floodgate-personal-v1` (trained on your own browsing)
+
+The point of Floodgate is a model of **your** judgment, so the second model is trained only on the user's own data, with no public data.
+
+- **Data:** 273 labelled rows from the user's own Chrome history: 120 real pages, each judged under two of four real tasks (building Floodgate, preparing a founder session, researching AI models, evening wind-down), plus 33 hand labels. The task labels were drafted by Codex (gpt-6-astra) as a teacher, given who the user is; 50 of the 120 pages flip answer depending on the task. The data stays on the laptop and is not in this repo.
+- **Training:** 8 River steps, about 2.5 minutes, LoRA r8 + `train_unembed`, your rows only.
+- **Honest test:** 65 rows held out by page (no page appears in both train and test).
+
+| Model, on your held-out pages | Agreement with your labels | Brier (lower is better) |
+|---|---:|---:|
+| Untrained base | 66–69% | 0.160 |
+| **Your model (`floodgate-personal-v1`)** | **77–80%** | **0.056** |
+
+Ranges: 80.0% / 69.2% measured during training on live weights; 76.9% / 66.2% re-measured through the saved checkpoint (River rounds logprobs; on 65 rows that is a two-row swing).
+
+**SemIf readout works on the same fine-tuned model.** Asking the same held-out pages SemIf's way (options A. No / B. Yes, read the letter scores) gives the personal model **76.9%, identical** to the Yes/No prompt it was trained on (Brier 0.057 vs 0.056), while the untrained model scores 61.5% with letters vs 66.2% with Yes/No. The fine-tune learned the judgment, not the phrasing.
+
+**The same page, two tasks (live gate, 15:18):**
+
+| Page | Task: build Floodgate | Task: evening wind-down |
+|---|---:|---:|
+| A webcomic chapter | **0.95, locked** | **0.18, allowed** |
+| A classic chess game video | **0.88, locked** | **0.22, allowed** |
+| River's API docs | **0.25, allowed** | **0.76, locked** |
+
+Caveat: most labels are an AI teacher's guesses about the user, reviewed rather than clicked one by one; the held-out set is small (65). Every "this is on task" correction from the extension is meant to replace teacher labels with the user's own over time.
+
+Run the gate on it:
+
+```bash
+python -m floodgate.gate_server --run models/floodgate-personal-v1.json --task "build Floodgate at the hackathon"
+```
 
 ## How Floodgate builds on Open-Jev and River
 
@@ -147,38 +180,6 @@ It matches or beats Jev on the clear calls, and scores the on-task TypeSafe docs
 
 The model is a file-like `river://` path plus one temperature, captured in [`models/open-jev-river-v1.json`](models/open-jev-river-v1.json). Anyone with access to the training account can serve it with one command. Handing someone your personal Floodgate model is handing them that card.
 
-## Your model: `floodgate-personal-v1` (trained on your own browsing)
-
-The point of Floodgate is a model of **your** judgment, so the second model is trained only on the user's own data, with no public data.
-
-- **Data:** 273 labelled rows from the user's own Chrome history: 120 real pages, each judged under two of four real tasks (building Floodgate, preparing a founder session, researching AI models, evening wind-down), plus 33 hand labels. The task labels were drafted by Codex (gpt-6-astra) as a teacher, given who the user is; 50 of the 120 pages flip answer depending on the task. The data stays on the laptop and is not in this repo.
-- **Training:** 8 River steps, about 2.5 minutes, LoRA r8 + `train_unembed`, your rows only.
-- **Honest test:** 65 rows held out by page (no page appears in both train and test).
-
-| Model, on your held-out pages | Agreement with your labels | Brier (lower is better) |
-|---|---:|---:|
-| Untrained base | 69.2% | 0.160 |
-| Public model (`open-jev-river-v1`) | 67.7% | 0.126 |
-| **Your model (`floodgate-personal-v1`)** | **80.0%** | **0.056** |
-
-The public model did **not** help on personal browsing, which is the thesis: general training makes a better generic judge, only your own data teaches your boundaries.
-
-**The same page, two tasks (live gate, 15:18):**
-
-| Page | Task: build Floodgate | Task: evening wind-down |
-|---|---:|---:|
-| A webcomic chapter | **0.95, locked** | **0.18, allowed** |
-| A classic chess game video | **0.88, locked** | **0.22, allowed** |
-| River's API docs | **0.25, allowed** | **0.76, locked** |
-
-Caveat: most labels are an AI teacher's guesses about the user, reviewed rather than clicked one by one; the held-out set is small (65). Every "this is on task" correction from the extension is meant to replace teacher labels with the user's own over time.
-
-Run the gate on it:
-
-```bash
-python -m floodgate.gate_server --run models/floodgate-personal-v1.json --task "build Floodgate at the hackathon"
-```
-
 ## Quick start
 
 ```bash
@@ -207,11 +208,18 @@ curl -s localhost:8791/v1/systemone -H 'Content-Type: application/json' -d '{
 
 ## The browser gate (Floodgate extension)
 
+Load it: `chrome://extensions` → Developer mode → **Load unpacked** → the `extension/` folder. It works right away with a built-in offline heuristic. Set your task from the popup.
+
+Then point it at your model (Dashboard → Model → "River open Jev (gate server)"):
+
 ```bash
-python -m floodgate.gate_server --task "finish the hackathon demo" --run data/runs/open-jev-river-v1-*.json
+python -m floodgate.gate_server --task "finish the hackathon demo" --run models/open-jev-river-v1.json
+python3 tools/mock_gate.py        # same API with no River, for building and demoing the extension
 ```
 
-Then open `chrome://extensions`, enable Developer mode, and **Load unpacked** the `extension/` folder. Set your task from the extension popup.
+Or load the trained model into a running gate server from the extension: Dashboard → Share → import `models/open-jev-river-v1.json`.
+
+Full guide (features, modes, the gate server contract, how teammates plug in GBrain/QM providers, demo script): [extension/README.md](extension/README.md).
 
 ## Layout
 
@@ -221,7 +229,8 @@ Then open `chrome://extensions`, enable Developer mode, and **Load unpacked** th
 | `floodgate/open_jev/scorer.py` | Yes/No logprob gap per candidate on River |
 | `floodgate/open_jev/train.py` | LoRA training on River + base vs trained eval + temperature |
 | `floodgate/open_jev/server.py` | `POST /v1/systemone`, same body and response as Jev |
-| `floodgate/gate_server.py`, `extension/` | The Floodgate browser gate |
+| `floodgate/gate_server.py`, `extension/` | The Floodgate browser gate ([guide](extension/README.md)) |
+| `tools/mock_gate.py` | Same HTTP contract as the gate server, no River: for extension work |
 | `floodgate/label_*`, `tools/label.html` | Labelling loop for personal gate rows |
 | `docs/` | PRD, River API guide and reference |
 

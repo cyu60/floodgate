@@ -8,6 +8,7 @@ SDKs' request format, and the Floodgate can all point at it.
 """
 import argparse
 import json
+import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -27,6 +28,7 @@ def main():
     ap.add_argument("--run", help="data/runs/*.json from train.py: reads checkpoint + temperature")
     ap.add_argument("--noul-run", help="letter-readout run card (models/semif-*.json from train_letters.py): answers yes/no questions")
     ap.add_argument("--port", type=int, default=8791)
+    ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to serve beyond this machine (set FLOODGATE_TOKEN first)")
     a = ap.parse_args()
     if a.run:
         info = json.load(open(a.run))
@@ -78,6 +80,9 @@ def main():
                 self._send(200, {"models": models})
 
             def do_POST(self):
+                need = os.environ.get("FLOODGATE_TOKEN")
+                if need and self.headers.get("Authorization", "") != f"Bearer {need}":
+                    return self._send(401, {"detail": "missing or wrong bearer token"})
                 if self.path.rstrip("/") != "/v1/systemone":
                     return self._send(404, {"detail": "Not Found"})
                 try:
@@ -95,7 +100,7 @@ def main():
                 pass
 
         print(f"open-jev on River: http://127.0.0.1:{a.port}/v1/systemone  model={model_name} T={a.temperature}" + (f"  yes/no -> {noul['name']} T={noul['temperature']:.2f}" if noul else ""))
-        ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()
+        ThreadingHTTPServer((a.host, a.port), H).serve_forever()
 
 
 if __name__ == "__main__":
