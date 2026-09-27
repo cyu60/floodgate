@@ -91,7 +91,7 @@ def main():
                     recs = compile_request(body.get("state"), body.get("questions"))
                     out = format_response(recs, probs(recs))
                     prompts = sum(1 if x["kind"] == "noul" else len(x["options"]) for x in recs)
-                    out.update(model=model_name, usage={"candidate_prompts": prompts, "latency_ms": int((time.time() - t0) * 1000)})
+                    out.update(model=model_name, checkpoint=a.checkpoint, usage={"candidate_prompts": prompts, "latency_ms": int((time.time() - t0) * 1000)})
                     self._send(200, out)
                 except ValueError as e:
                     self._send(422, {"detail": str(e)})
