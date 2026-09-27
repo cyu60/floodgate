@@ -208,11 +208,18 @@ curl -s localhost:8791/v1/systemone -H 'Content-Type: application/json' -d '{
 
 ## The browser gate (Floodgate extension)
 
+Load it: `chrome://extensions` → Developer mode → **Load unpacked** → the `extension/` folder. It works right away with a built-in offline heuristic. Set your task from the popup.
+
+Then point it at your model (Dashboard → Model → "River open Jev (gate server)"):
+
 ```bash
-python -m floodgate.gate_server --task "finish the hackathon demo" --run data/runs/open-jev-river-v1-*.json
+python -m floodgate.gate_server --task "finish the hackathon demo" --run models/open-jev-river-v1.json
+python3 tools/mock_gate.py        # same API with no River, for building and demoing the extension
 ```
 
-Then open `chrome://extensions`, enable Developer mode, and **Load unpacked** the `extension/` folder. Set your task from the extension popup.
+Or load the trained model into a running gate server from the extension: Dashboard → Share → import `models/open-jev-river-v1.json`.
+
+Full guide (features, modes, the gate server contract, how teammates plug in GBrain/QM providers, demo script): [extension/README.md](extension/README.md).
 
 ## Layout
 
@@ -222,7 +229,8 @@ Then open `chrome://extensions`, enable Developer mode, and **Load unpacked** th
 | `floodgate/open_jev/scorer.py` | Yes/No logprob gap per candidate on River |
 | `floodgate/open_jev/train.py` | LoRA training on River + base vs trained eval + temperature |
 | `floodgate/open_jev/server.py` | `POST /v1/systemone`, same body and response as Jev |
-| `floodgate/gate_server.py`, `extension/` | The Floodgate browser gate |
+| `floodgate/gate_server.py`, `extension/` | The Floodgate browser gate ([guide](extension/README.md)) |
+| `tools/mock_gate.py` | Same HTTP contract as the gate server, no River: for extension work |
 | `floodgate/label_*`, `tools/label.html` | Labelling loop for personal gate rows |
 | `docs/` | PRD, River API guide and reference |
 

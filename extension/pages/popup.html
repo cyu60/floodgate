@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Floodgate</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { width: 360px; }
+    header, section, footer { padding: 12px 14px; }
+    header { border-bottom: 1px solid var(--line); background: var(--panel); }
+    section + section { padding-top: 0; }
+    label.q { display: block; font-weight: 650; margin-bottom: 6px; }
+    #taskForm { display: flex; gap: 6px; }
+    #recent { margin-top: 8px; }
+    #modeHint { margin: 6px 2px 0; }
+    #pageCard .title { font-weight: 600; margin: 10px 0 2px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    #pct { font-weight: 750; font-size: 20px; font-variant-numeric: tabular-nums; }
+    #pageCard .bar { margin-top: 8px; }
+    .btns { display: flex; gap: 6px; margin-top: 10px; }
+    .btns button { flex: 1; }
+    footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); background: var(--panel); }
+    #paused { display: none; margin: 0 14px 12px; }
+  </style>
+</head>
+<body>
+  <header class="spread">
+    <div class="brand"><img src="../icons/icon32.png" alt="">Floodgate</div>
+    <span id="status" class="pill status" title="Which model decides"><i></i><span>…</span></span>
+  </header>
+
+  <section style="padding-top:14px">
+    <label class="q" for="task">What are you working on?</label>
+    <form id="taskForm">
+      <input id="task" type="text" placeholder="e.g. finish the Floodgate demo slides" autocomplete="off">
+      <button class="primary" type="submit">Set</button>
+    </form>
+    <div id="recent" class="chips"></div>
+  </section>
+
+  <section>
+    <div id="modes" class="seg" role="radiogroup" aria-label="Mode"></div>
+    <p id="modeHint" class="small dim"></p>
+  </section>
+
+  <div id="paused" class="card small"></div>
+
+  <section>
+    <div id="pageCard" class="card">
+      <div class="spread"><span id="verdict" class="pill">No page yet</span><span id="pct"></span></div>
+      <div class="bar"><i id="bar"></i></div>
+      <div id="pageTitle" class="title"></div>
+      <div id="reason" class="small dim"></div>
+      <div id="source" class="tiny faint" style="margin-top:4px"></div>
+      <div class="btns" id="labelBtns">
+        <button id="onTask" class="good" title="Label this page on task for your current task">On task</button>
+        <button id="distraction" class="bad" title="Label this page a distraction for your current task">Distraction</button>
+      </div>
+    </div>
+  </section>
+
+  <p id="stats" class="tiny dim" style="margin:0 14px 12px"></p>
+  <footer>
+    <button id="pause" title="Alt+Shift+P">Pause 15 min</button>
+    <a id="dash" href="#" style="white-space:nowrap">Dashboard: teach, model, share →</a>
+  </footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

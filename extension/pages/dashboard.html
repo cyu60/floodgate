@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Floodgate dashboard</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { min-height: 100vh; }
+    .top { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+    .top .inner { max-width: 1040px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    nav { display: flex; gap: 2px; flex-wrap: wrap; }
+    nav a { color: var(--dim); font-weight: 600; padding: 7px 12px; border-radius: 9px; }
+    nav a:hover { text-decoration: none; background: var(--panel-2); color: var(--text); }
+    nav a[aria-current="page"] { background: var(--panel-2); color: var(--text); }
+    .top .status { margin-left: auto; }
+    main { max-width: 1040px; margin: 0 auto; padding: 22px 20px 60px; }
+    main > section { display: none; }
+    main > section.on { display: block; }
+    h2 { font-size: 20px; margin-bottom: 4px; }
+    h3 { font-size: 14px; margin-bottom: 8px; }
+    .lead { color: var(--dim); margin: 0 0 18px; max-width: 70ch; }
+    .grid { display: grid; gap: 14px; }
+    .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 18px; }
+    .tile .n { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .tile .l { color: var(--dim); font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 12px; color: var(--faint); font-weight: 600; }
+    td.page { max-width: 420px; }
+    td.page b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    td.page .tiny { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; max-width: 420px; }
+    td.num { font-variant-numeric: tabular-nums; font-weight: 650; }
+    td.acts { white-space: nowrap; text-align: right; }
+    td.acts button { padding: 4px 8px; font-size: 12px; }
+    .scroll { overflow-x: auto; }
+    .welcome { border-color: var(--accent); background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--panel); margin-bottom: 18px; }
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 12px; }
+    .step b { display: block; margin-bottom: 6px; }
+    .qcard { padding: 22px; min-height: 210px; }
+    .qcard .t { font-size: 20px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; margin: 8px 0 4px; }
+    .qcard .u { font-family: var(--mono); font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+    .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 18px; }
+    .answers button { padding: 12px 8px; }
+    .answers kbd { margin-right: 6px; }
+    .provider { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; }
+    .provider input[type="radio"] { margin-top: 4px; }
+    .provider .fields { grid-column: 2; display: grid; gap: 8px; margin-top: 8px; }
+    .provider .fields label { font-size: 12px; color: var(--dim); display: grid; gap: 4px; }
+    .provider.on { border-color: var(--accent); }
+    .field { display: grid; gap: 6px; }
+    .field > span { font-weight: 600; font-size: 13px; }
+    .modes td { font-variant-numeric: tabular-nums; }
+    .msg { font-size: 12.5px; margin-top: 6px; min-height: 1em; }
+    .msg.ok { color: var(--allow); }
+    .msg.bad { color: var(--block); }
+    .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .inline label { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+    .preview { max-height: 260px; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="inner">
+      <div class="brand"><img src="../icons/icon32.png" alt="">Floodgate</div>
+      <nav>
+        <a href="#overview">Overview</a>
+        <a href="#teach">Teach</a>
+        <a href="#model">Model</a>
+        <a href="#share">Share</a>
+      </nav>
+      <span id="status" class="pill status"><i></i><span>…</span></span>
+    </div>
+  </div>
+
+  <main>
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <div id="welcome" class="card welcome" hidden>
+        <h2>Welcome to Floodgate</h2>
+        <p class="dim" style="margin:4px 0 0">Tell it what you're doing. It checks every page you open against that task, blocks the drift, asks you when it isn't sure, and learns from your answers.</p>
+        <div class="steps">
+          <div class="step card">
+            <b>1 · Your task</b>
+            <form id="wTaskForm" class="row"><input id="wTask" type="text" placeholder="e.g. research Jev for the hackathon"><button class="primary">Set</button></form>
+          </div>
+          <div class="step card">
+            <b>2 · A mode</b>
+            <div id="wModes" class="seg" role="radiogroup" aria-label="Mode"></div>
+            <p id="wModeHint" class="small dim" style="margin:6px 0 0"></p>
+          </div>
+          <div class="step card">
+            <b>3 · Pin it and browse</b>
+            <p class="small dim" style="margin:0 0 8px">Click the puzzle icon in Chrome's toolbar and pin Floodgate. Works offline now; connect your River model under <a href="#model">Model</a>.</p>
+            <button id="wDone">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid tiles">
+        <div class="card tile"><div class="n" id="sChecked">0</div><div class="l">pages checked today</div></div>
+        <div class="card tile"><div class="n" id="sBlocked">0</div><div class="l">blocked today</div></div>
+        <div class="card tile"><div class="n" id="sNudged">0</div><div class="l">asked you today</div></div>
+        <div class="card tile"><div class="n" id="sLabels">0</div><div class="l">labels (training rows)</div></div>
+      </div>
+
+      <div class="card">
+        <div class="spread" style="margin-bottom:6px">
+          <h3 style="margin:0">Recent decisions</h3>
+          <span class="tiny faint">Wrong call? Relabel it: ✓ on task, ✗ distraction. Each label is a training row.</span>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Time</th><th>Page</th><th>P</th><th>Verdict</th><th>Decided by</th><th></th></tr></thead>
+            <tbody id="log"></tbody>
+          </table>
+        </div>
+        <div id="logEmpty" class="empty">Nothing yet. Set a task and open a few pages.</div>
+      </div>
+    </section>
+
+    <!-- TEACH -->
+    <section id="teach">
+      <h2>Teach it with your browsing history</h2>
+      <p class="lead">Label pages you already visited. Floodgate asks about the ones it is least sure of first. Every answer is a training row for your own model (Share → Download training rows), and it takes effect in the extension right away.</p>
+      <div class="card" style="margin-bottom:14px">
+        <div class="grid g2" style="align-items:end">
+          <label class="field"><span>Label them for this task</span><input id="tTask" type="text" placeholder="the task these visits should be judged against"></label>
+          <div class="inline">
+            <label class="field" style="flex:1"><span>From</span>
+              <select id="tRange"><option value="1">the last 24 hours</option><option value="7" selected>the last 7 days</option><option value="30">the last 30 days</option></select>
+            </label>
+            <button id="tLoad" class="primary" style="align-self:end">Load my history</button>
+          </div>
+        </div>
+      </div>
+      <div id="tQueue" class="card qcard">
+        <div class="empty">Pick a task and load your history.</div>
+      </div>
+      <p class="small faint">Keys: <kbd>1</kbd> on task · <kbd>2</kbd> distraction · <kbd>3</kbd> it depends · <kbd>Space</kbd> skip · <kbd>Z</kbd> undo</p>
+
+      <div class="card" style="margin-top:18px">
+        <div class="spread"><h3 style="margin:0">Your labels</h3><span id="lCount" class="tiny faint"></span></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>When</th><th>Page</th><th>Task</th><th>Label</th><th></th></tr></thead>
+            <tbody id="labels"></tbody>
+          </table>
+        </div>
+        <div id="labelsEmpty" class="empty">No labels yet.</div>
+      </div>
+    </section>
+
+    <!-- MODEL -->
+    <section id="model">
+      <h2>Model</h2>
+      <p class="lead">Pick who decides. If it can't be reached, Floodgate falls back to the offline heuristic and says so on the block screen. Your labels always apply first.</p>
+      <div id="providers" class="grid" style="margin-bottom:18px"></div>
+
+      <div class="grid g2">
+        <div class="card stack">
+          <h3>About me</h3>
+          <p class="small dim" style="margin:0">Sent to the model with every page. Say what counts as work for you: "I'm a content creator, trends are my job", "I'm a musician", "I review ML papers".</p>
+          <textarea id="profile" placeholder="Anything that changes what counts as a distraction for you"></textarea>
+          <div class="inline"><label><input id="sendLabels" type="checkbox"> Send my labels to the model server (POST /override) so it can retrain on them</label></div>
+          <button id="saveProfile">Save</button>
+          <div id="profileMsg" class="msg"></div>
+        </div>
+        <div class="card stack">
+          <h3>Modes</h3>
+          <table class="modes"><thead><tr><th>Mode</th><th>Blocks at</th><th>Asks from</th><th></th></tr></thead><tbody id="modesTable"></tbody></table>
+        </div>
+        <div class="card stack">
+          <h3>Always allow</h3>
+          <p class="small dim" style="margin:0">One domain per line. Never checked.</p>
+          <textarea id="allow" placeholder="github.com"></textarea>
+          <h3>Always block</h3>
+          <textarea id="block" placeholder="tiktok.com"></textarea>
+          <button id="saveRules">Save lists</button>
+          <div id="rulesMsg" class="msg"></div>
+        </div>
+        <div class="card stack">
+          <h3>Context providers</h3>
+          <p class="small dim" style="margin:0">Add facts to what the model sees (for example what GBrain knows you're working on). Add one with <code>providers/_template.js</code>.</p>
+          <div id="enrichers"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHARE -->
+    <section id="share">
+      <h2>Share your model</h2>
+      <p class="lead">A model card is a small JSON file: your River checkpoint and calibration temperature (the trained model), your rules, and optionally your labelled examples. Send it to a teammate on the same task and they get your judgment.</p>
+      <div class="grid g2">
+        <div class="card stack">
+          <h3>Export my model card</h3>
+          <label class="field"><span>Name</span><input id="cName" type="text" placeholder="e.g. Aditya's hackathon focus model"></label>
+          <label class="field"><span>Author</span><input id="cAuthor" type="text" placeholder="your name or GitHub handle"></label>
+          <label class="field"><span>Description</span><input id="cDesc" type="text" placeholder="what it's good at"></label>
+          <div class="inline"><label><input id="cExamples" type="checkbox"> Include my labelled pages (URLs and titles; leave off to keep your history private)</label></div>
+          <button id="cExport" class="primary">Download model card</button>
+          <div id="cMsg" class="msg"></div>
+        </div>
+        <div class="card stack">
+          <h3>Import a model card</h3>
+          <input id="cFile" type="file" accept=".json,application/json">
+          <div id="cPreview" hidden>
+            <pre id="cPreviewText" class="preview"></pre>
+            <div class="inline" style="margin-top:8px">
+              <label><input id="cUseModel" type="checkbox" checked> Load their River checkpoint into my gate server</label>
+              <label><input id="cUseMode" type="checkbox"> Use their mode and "about me"</label>
+            </div>
+            <button id="cApply" class="primary" style="margin-top:8px">Add to my Floodgate</button>
+          </div>
+          <div id="cImportMsg" class="msg"></div>
+          <h3 style="margin-top:14px">Imported</h3>
+          <div id="imported" class="small dim">None yet.</div>
+        </div>
+        <div class="card stack">
+          <h3>Training data</h3>
+          <p class="small dim" style="margin:0">Your labels as Open-Jev noul rows, the same format as <code>prep_gate_dataset.py</code>. Hand them to whoever runs River training:</p>
+          <pre>python -m floodgate.open_jev.train --extra ~/Downloads/floodgate-labels.jsonl</pre>
+          <div class="inline"><label><input id="dShared" type="checkbox"> Include labels imported from model cards</label></div>
+          <div class="inline">
+            <button id="dRows" class="primary">Download training rows (.jsonl)</button>
+            <button id="dHistory">Download raw history (.json)</button>
+          </div>
+          <div id="dMsg" class="msg"></div>
+        </div>
+        <div class="card stack">
+          <h3>Reset</h3>
+          <p class="small dim" style="margin:0">Everything is stored in this browser only (chrome.storage.local).</p>
+          <div class="inline">
+            <button id="rLog" class="bad">Clear decision log</button>
+            <button id="rLabels" class="bad">Delete all labels</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
