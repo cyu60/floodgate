@@ -5,6 +5,9 @@
 
 Stdlib only. Keeps one River session open; decisions and overrides are appended to
 data/gate_log.jsonl so every override becomes a training row.
+
+The Chrome extension also sends `task` and `about_me` with each page (so several tabs or people can use
+different tasks), and can hot-swap the model from a shared model card via POST /model.
 """
 import argparse
 import json
@@ -22,24 +25,28 @@ from floodgate.open_jev.scorer import Renderer, score_records, session_sampler
 
 LOG = Path(__file__).resolve().parent.parent / "data" / "gate_log.jsonl"
 QUESTION = "Is this page a distraction from the stated task?"
-STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0}
-CACHE: dict[str, tuple[float, float]] = {}
+STATE = {"task": "deep work", "threshold": 0.7, "checkpoint": None, "temperature": 1.0, "profile": "", "base_model": BASE_MODEL}
+CACHE: dict[tuple, tuple[float, float]] = {}
 LOCK = threading.Lock()
 
 
-def decide(session, tok, url: str, title: str) -> dict:
-    key = url.split("#")[0]
+def decide(session, tok, url: str, title: str, task: str | None = None, about_me: str | None = None) -> dict:
+    task = task or STATE["task"]
+    about_me = STATE["profile"] if about_me is None else about_me
+    key = (task, about_me, url.split("#")[0])
     now = time.time()
     if key in CACHE and now - CACHE[key][1] < 600:
         p = CACHE[key][0]
     else:
-        state = {"url": url[:300], "title": title[:160], "time": f"{datetime.now():%H:%M %A}", "stated_task": STATE["task"]}
+        state = {"url": url[:300], "title": title[:160], "time": f"{datetime.now():%H:%M %A}", "stated_task": task}
+        if about_me:
+            state["about_me"] = about_me[:300]
         recs = compile_request(state, {"distraction": {"type": "noul", "instructions": QUESTION}})
         with LOCK:
             logits = score_records(recs, Renderer(tok), session_sampler(session, BASE_MODEL, STATE["checkpoint"]))
         p = softmax(logits[0], STATE["temperature"])[1]
         CACHE[key] = (p, now)
-    return {"p": round(p, 3), "lock": p >= STATE["threshold"], "task": STATE["task"]}
+    return {"p": round(p, 3), "lock": p >= STATE["threshold"], "task": task}
 
 
 def make_handler(session, tok):
@@ -64,15 +71,21 @@ def make_handler(session, tok):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0) or 0)) or b"{}")
             if self.path == "/task":
                 STATE["task"] = body.get("task", STATE["task"])
+                STATE["profile"] = body.get("profile", STATE["profile"]) or ""
                 CACHE.clear()
                 return self._json(200, {"task": STATE["task"]})
+            if self.path == "/model":  # load a shared model card's checkpoint without restarting
+                STATE["checkpoint"] = body.get("checkpoint") or None
+                STATE["temperature"] = float(body.get("temperature") or 1.0)
+                CACHE.clear()
+                return self._json(200, {"checkpoint": STATE["checkpoint"], "temperature": STATE["temperature"]})
             if self.path == "/override":  # user says the decision was wrong -> training row
                 row = {"ts": datetime.now().isoformat(), "kind": "override", **body}
                 LOG.parent.mkdir(exist_ok=True)
                 LOG.open("a").write(json.dumps(row) + "\n")
                 return self._json(200, {"logged": True})
             t0 = time.time()
-            d = decide(session, tok, body.get("url", ""), body.get("title", ""))
+            d = decide(session, tok, body.get("url", ""), body.get("title", ""), body.get("task"), body.get("about_me"))
             d["ms"] = int((time.time() - t0) * 1000)
             LOG.parent.mkdir(exist_ok=True)
             LOG.open("a").write(json.dumps({"ts": datetime.now().isoformat(), "kind": "decision", "url": body.get("url"), "title": body.get("title"), **d}) + "\n")
