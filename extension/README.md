@@ -27,6 +27,7 @@ Open the Floodgate popup → **Dashboard → Model**, pick a provider and click 
 | same, mocked | `python3 tools/mock_gate.py` (same API, no River or venv, ~1.5 s fake latency) | Building and demoing before the River model is up |
 | **Jev-compatible endpoint** | `python -m floodgate.open_jev.server --run data/runs/<run>.json` (port 8791) | Any `/v1/systemone` server; also TypeSafe's hosted Jev as a baseline (API key + model `jev-latest`) |
 | **Offline heuristic** | built in | Default, and the fallback whenever the model can't be reached |
+| **GBrain memory** (context provider) | gbrain.io workspace → Add a connection → copy the token (Full access to remember) | Remembers every correction in GBrain per task, and recalls what GBrain knows about your current task. Test offline with `python3 tools/mock_gbrain_mcp.py` (endpoint `http://127.0.0.1:8799/mcp`, any token) |
 
 If the model is down, Floodgate falls back to the heuristic and says so on the block screen ("offline heuristic (… unreachable)"). While a slow model is thinking, likely distractions stay behind a "checking" screen with the video paused.
 
