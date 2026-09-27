@@ -14,7 +14,7 @@ In one afternoon at the Own Your Intelligence Hackathon, we went from "can an op
 
 1. **Proved the core idea on River.** Open-Jev's decision head starts as `logit(Yes) − logit(No)`. River returns exactly that from any open model, so an untrained model on River already behaves like Open-Jev at step 0. No GPU, no custom head.
 2. **Ported Open-Jev's System One API** (noul, choice, score, confidence, legend) so requests and responses are byte-compatible with Jev's `POST /v1/systemone`.
-3. **Trained our own open Jev on River**: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
+3. **Trained our own open Jev on River**, then **a personal model on the user's own browsing** (69% to 80% agreement on held-out personal pages, where the public model did not help).: `open-jev-river-v1`, 20 training steps in 23 minutes of River compute, on a stratified sample of Open-Jev's public data. Calibrated test accuracy went **69.7% → 86.2%**, and **75.4% → 87.7%** on task types it never saw.
 4. **Served it as a Jev-compatible API.** The same `curl` that works against TypeSafe's Jev works against our checkpoint.
 5. **Built Floodgate**, a Chrome extension plus local gate. It asks the model "is this page a distraction from my stated task?" on every navigation, locks the page above a threshold, and logs every "this is on task" override as a new training row.
 6. **Benchmarked against real Jev.** Our trained model matches or beats Jev on the obvious calls. Neither model knows where *your* task begins and ends, and that is the gap Floodgate closes with personal training.
@@ -146,6 +146,38 @@ It matches or beats Jev on the clear calls, and scores the on-task TypeSafe docs
 ### Sharing it
 
 The model is a file-like `river://` path plus one temperature, captured in [`models/open-jev-river-v1.json`](models/open-jev-river-v1.json). Anyone with access to the training account can serve it with one command. Handing someone your personal Floodgate model is handing them that card.
+
+## Your model: `floodgate-personal-v1` (trained on your own browsing)
+
+The point of Floodgate is a model of **your** judgment, so the second model is trained only on the user's own data, with no public data.
+
+- **Data:** 273 labelled rows from the user's own Chrome history: 120 real pages, each judged under two of four real tasks (building Floodgate, preparing a founder session, researching AI models, evening wind-down), plus 33 hand labels. The task labels were drafted by Codex (gpt-6-astra) as a teacher, given who the user is; 50 of the 120 pages flip answer depending on the task. The data stays on the laptop and is not in this repo.
+- **Training:** 8 River steps, about 2.5 minutes, LoRA r8 + `train_unembed`, your rows only.
+- **Honest test:** 65 rows held out by page (no page appears in both train and test).
+
+| Model, on your held-out pages | Agreement with your labels | Brier (lower is better) |
+|---|---:|---:|
+| Untrained base | 69.2% | 0.160 |
+| Public model (`open-jev-river-v1`) | 67.7% | 0.126 |
+| **Your model (`floodgate-personal-v1`)** | **80.0%** | **0.056** |
+
+The public model did **not** help on personal browsing, which is the thesis: general training makes a better generic judge, only your own data teaches your boundaries.
+
+**The same page, two tasks (live gate, 15:18):**
+
+| Page | Task: build Floodgate | Task: evening wind-down |
+|---|---:|---:|
+| A webcomic chapter | **0.95, locked** | **0.18, allowed** |
+| A classic chess game video | **0.88, locked** | **0.22, allowed** |
+| River's API docs | **0.25, allowed** | **0.76, locked** |
+
+Caveat: most labels are an AI teacher's guesses about the user, reviewed rather than clicked one by one; the held-out set is small (65). Every "this is on task" correction from the extension is meant to replace teacher labels with the user's own over time.
+
+Run the gate on it:
+
+```bash
+python -m floodgate.gate_server --run models/floodgate-personal-v1.json --task "build Floodgate at the hackathon"
+```
 
 ## Quick start
 

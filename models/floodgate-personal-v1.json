@@ -1,0 +1,23 @@
+{
+  "name": "floodgate-personal-v1",
+  "labels": 273,
+  "train_personal": 208,
+  "heldout": 65,
+  "public_mixed": 0,
+  "eval": {
+    "base": {
+      "agreement": 0.6923076923076923,
+      "brier": 0.15974006650899725
+    },
+    "public": {
+      "agreement": 0.676923076923077,
+      "brier": 0.1261720254066434
+    },
+    "personal": {
+      "agreement": 0.8,
+      "brier": 0.05606708170164851
+    }
+  },
+  "checkpoint": "river://636e7e8a-a557-492c-98fd-0718a6fd28d0/sampler_weights/floodgate-personal-v1",
+  "temperature": 1.0
+}
