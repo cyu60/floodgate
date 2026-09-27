@@ -35,11 +35,16 @@ export const MODES = {
 // Never gated: your own tools, sign-in pages and the gate servers themselves.
 export const ALWAYS_ALLOW = ["localhost", "127.0.0.1", "accounts.google.com", "chromewebstore.google.com", "chrome.google.com"];
 
+// The team's River model (floodgate/open_jev/server.py behind ngrok). If ngrok restarts the address changes:
+// update it here (new installs) or in Dashboard → Model (existing installs).
+export const DEFAULT_MODEL_URL = "https://3a4b-64-71-26-103.ngrok-free.app/v1/systemone";
+
 export const DEFAULT_SETTINGS = {
+  settingsVersion: 2,
   task: "",
   profile: "",
   mode: "focus",
-  provider: "heuristic", // id of the decision provider (see providers/index.js)
+  provider: "systemone", // id of the decision provider (see providers/index.js); falls back to the heuristic when unreachable
   providerSettings: {}, // { [providerId]: { key: value } }
   enrichers: {}, // { [providerId]: true } for providers that add context (GBrain, ...)
   allowDomains: [], // your "always allow" list

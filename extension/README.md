@@ -16,7 +16,13 @@ It works right away with the built-in **offline heuristic**, so a demo never dep
 
 **After you pull changes** (yours or a teammate's): `chrome://extensions` → Floodgate → reload (↻), then reload any open tabs.
 
-## 2. Connect a real model (optional)
+## 2. Connect the River model (on by default)
+
+The extension uses the team's River model out of the box: **Dashboard → Model → "River model (Jev-compatible /v1/systemone)"** is preselected with the team's ngrok address. Paste the bearer token you were sent into **API key / bearer token** and click **Test connection**. Until the token is in, or when the laptop serving the model is asleep, Floodgate uses the offline heuristic and the block screen says why. Each decision takes about 4 to 8 seconds. If ngrok restarts, paste the new address into **Endpoint** (for new installs, update `DEFAULT_MODEL_URL` in `lib/config.js`).
+
+Site home pages (like youtube.com) are never blocked, so you can search; Floodgate judges what you open next.
+
+### Other providers
 
 Open the Floodgate popup → **Dashboard → Model**, pick a provider and click **Test connection**.
 

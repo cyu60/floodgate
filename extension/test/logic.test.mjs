@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MODES } from "../lib/config.js";
-import { actionFor } from "../lib/classifier.js";
+import { actionFor, classify, isLaunchPad } from "../lib/classifier.js";
+import { stateLine } from "../providers/systemone.js";
 import { heuristicScore } from "../lib/heuristic.js";
 import { recall } from "../lib/memory.js";
 import { buildCard, cardLabels, parseCard } from "../lib/modelcard.js";
@@ -121,4 +122,26 @@ test("the personal model card imports with its held-out agreement", async () => 
   const card = parseCard(text);
   assert.equal(card.backend.checkpoint, JSON.parse(text).checkpoint);
   assert.match(card.description, /^Personal model trained on River, 80% agreement on held-out pages \(untrained 69\.2%\)$/);
+});
+
+test("home pages are open so you can search; what you open next is judged", async () => {
+  assert.ok(isLaunchPad("https://www.youtube.com/"));
+  assert.ok(isLaunchPad("https://www.youtube.com"));
+  assert.ok(!isLaunchPad("https://www.youtube.com/watch?v=abc"));
+  assert.ok(!isLaunchPad("https://www.google.com/?q=gta"));
+  assert.ok(!isLaunchPad("https://x.com/home"));
+  const settings = { task: "research Jev", mode: "focus", provider: "heuristic", allowDomains: [], blockDomains: [], pausedUntil: 0, profile: "" };
+  const home = await classify({ url: "https://www.youtube.com/", title: "YouTube" }, settings, []);
+  assert.equal(home.action, "allow");
+  const off = await classify({ url: "https://www.youtube.com/watch?v=1", title: "GTA 6 gameplay funny moments" }, settings, []);
+  assert.equal(off.action, "block");
+  const blocked = await classify({ url: "https://www.youtube.com/", title: "YouTube" }, { ...settings, blockDomains: ["youtube.com"] }, []);
+  assert.equal(blocked.action, "block", "your block list still wins");
+});
+
+test("the River model gets the exact text line it was trained on", () => {
+  const line = stateLine({ url: "https://www.youtube.com/watch?v=1", title: "Jev in 100 Seconds" }, { time: "14:05 Sunday", task: "research Jev" });
+  assert.equal(line, "URL: https://www.youtube.com/watch?v=1 Title: Jev in 100 Seconds. Time: 14:05 Sunday. Stated task: research Jev.");
+  const ts = new Date(2026, 8, 27, 14, 5).getTime();
+  assert.equal(line, labelToRow({ url: "https://www.youtube.com/watch?v=1", title: "Jev in 100 Seconds", task: "research Jev", label: 0, ts }).state);
 });
