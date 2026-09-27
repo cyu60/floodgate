@@ -12,7 +12,18 @@
 // Talks plain MCP over streamable HTTP (JSON-RPC: initialize, tools/list, tools/call). Tool names are discovered
 // from tools/list (anything matching remember/write/save/add for writes, search/recall/query/find for reads).
 
+import { labelWord } from "../lib/memory.js";
+import { canonicalUrl, taskSimilarity } from "../lib/text.js";
+
 const PROTOCOL = "2025-06-18";
+const recallCache = new Map(); // "task|url" -> {at, hit}
+
+// Reads back the notes onLabel writes: Floodgate correction (<iso>): while working on "<task>", the page "<title>" (<url>) is <VERDICT>.
+const NOTE = /Floodgate correction \(([^)]*)\): while working on "(.*?)", the page "(.*?)" \((https?:\/\/\S+?)\) is (ON TASK|a DISTRACTION|IT DEPENDS)/g;
+const VERDICT = { "ON TASK": 0, "a DISTRACTION": 1, "IT DEPENDS": 0.5 };
+export function parseCorrections(text) {
+  return [...String(text || "").matchAll(NOTE)].map(([, ts, task, title, url, v]) => ({ ts: Date.parse(ts) || 0, task, title, url, label: VERDICT[v] }));
+}
 let session = { key: "", id: null, tools: null, nextId: 1 };
 const cache = new Map(); // task -> {at, text}
 
@@ -106,7 +117,28 @@ export default {
     return text ? { gbrain: text } : {};
   },
 
+  // Memory: a correction you made on any device (or any agent wrote to your GBrain) decides this page for the same task.
+  async recall(page, ctx, cfg) {
+    if (!ctx.task || !cfg.token) return null;
+    const url = canonicalUrl(page.url);
+    const key = `${ctx.task}|${url}`;
+    const cached = recallCache.get(key);
+    if (cached && Date.now() - cached.at < 60_000) return cached.hit;
+    const tools = await connect(cfg);
+    const s = pick(tools, /search|recall|query|find/i, cfg.searchTool);
+    if (!s) return null;
+    const r = await rpc(cfg, "tools/call", { name: s.name, arguments: argsFor(s, `Floodgate correction ${url}`) });
+    const h = parseCorrections(textOf(r))
+      .filter((c) => canonicalUrl(c.url) === url && taskSimilarity(c.task, ctx.task) >= 0.5)
+      .sort((a, b) => a.ts - b.ts)
+      .at(-1);
+    const hit = h ? { p: h.label, reason: `GBrain remembers: this page is ${labelWord(h.label)} for “${h.task}”`, source: "GBrain memory" } : null;
+    recallCache.set(key, { at: Date.now(), hit });
+    return hit;
+  },
+
   async onLabel(l, ctx, cfg) {
+    recallCache.clear();
     const tools = await connect(cfg);
     const w = pick(tools, /remember|write|save|add|note/i, cfg.rememberTool);
     if (!w) throw new Error("GBrain has no remember tool on this connection (needs Full access).");
