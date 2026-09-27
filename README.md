@@ -4,7 +4,7 @@
 
 **Own Your Intelligence Hackathon** · YC HQ, San Francisco · September 27, 2026 · hosted by River AI, GBrain, Memorable, QM, Superset and UFO.
 
-Team: [cyu60](https://github.com/cyu60), [quachphu](https://github.com/quachphu), [TriNguyen1110](https://github.com/TriNguyen1110), [AdityaGaur77](https://github.com/AdityaGaur77).
+Team: [cyu60](https://github.com/cyu60), [quachphu](https://github.com/quachphu), [TriNguyen1110](https://github.com/TriNguyen1110), [AdityaGaur77](https://github.com/AdityaGaur77), [atilavahedian](https://github.com/atilavahedian).
 
 A calibrated decision model (an **open Jev**) trained on **River**. Floodgate asks "is this page a distraction from what I said I'm doing?" before each page loads. Read the full PRD: [docs/PRD.md](docs/PRD.md).
 

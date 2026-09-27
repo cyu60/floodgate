@@ -127,7 +127,7 @@ Trained results: see `data/runs/open-jev-river-v1-*.json` and the README results
 
 ## 11. Team and next steps
 
-Team: Chinat Yu (cyu60), quachphu, TriNguyen1110, AdityaGaur77.
+Team: Chinat Yu (cyu60), quachphu, TriNguyen1110, AdityaGaur77, atilavahedian (Atila).
 
 1. Finish the trained run and fill the results table.
 2. Load the extension, set a task, record the demo.
