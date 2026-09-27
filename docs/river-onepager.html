@@ -1,0 +1,253 @@
+<title>Floodgate on River</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper: #F5F7F7;
+    --panel: #FFFFFF;
+    --ink: #15222B;
+    --ink-2: #44535C;
+    --rule: #D5DEE0;
+    --accent: #0B7A84;
+    --accent-soft: #E3F1F2;
+    --send: #1E7F55;
+    --hold: #A86B12;
+    --dont: #AE3F2E;
+    --code-bg: #EDF2F3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #0F181E;
+      --panel: #15222B;
+      --ink: #E4ECEE;
+      --ink-2: #A3B3B9;
+      --rule: #2A3A43;
+      --accent: #4FC0C9;
+      --accent-soft: #133139;
+      --send: #5CC392;
+      --hold: #E0A64B;
+      --dont: #EE8470;
+      --code-bg: #1A2A33;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0F181E;
+    --panel: #15222B;
+    --ink: #E4ECEE;
+    --ink-2: #A3B3B9;
+    --rule: #2A3A43;
+    --accent: #4FC0C9;
+    --accent-soft: #133139;
+    --send: #5CC392;
+    --hold: #E0A64B;
+    --dont: #EE8470;
+    --code-bg: #1A2A33;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.6 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 40px 56px;
+    display: grid;
+    gap: 34px;
+  }
+  h1, h2 {
+    font-family: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.15;
+  }
+  h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 22px; font-weight: 600; }
+  p { margin: 0; max-width: 68ch; }
+  .eyebrow {
+    font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  header { display: grid; gap: 12px; border-bottom: 2px solid var(--ink); padding-bottom: 22px; }
+  .lede { font-size: 18px; line-height: 1.5; color: var(--ink); max-width: 64ch; }
+  .meta { color: var(--ink-2); font-size: 13.5px; }
+  .meta a { color: var(--accent); }
+  section { display: grid; gap: 14px; }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .fact { background: var(--panel); padding: 14px 16px; display: grid; gap: 4px; }
+  .fact b { font: 600 24px/1.1 "IBM Plex Sans Condensed", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .fact span { font-size: 13px; color: var(--ink-2); }
+  .formula {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    font: 14px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+    overflow-x: auto;
+  }
+  pre {
+    margin: 0;
+    background: var(--code-bg);
+    padding: 14px 16px;
+    font: 13px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+  }
+  code { font: 0.92em "IBM Plex Mono", ui-monospace, monospace; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font: 600 12px/1.3 "IBM Plex Mono", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .v { font: 600 12px/1 "IBM Plex Mono", ui-monospace, monospace; padding: 4px 8px; border: 1.5px solid currentColor; display: inline-block; white-space: nowrap; }
+  .v.send { color: var(--send); }
+  .v.hold { color: var(--hold); }
+  .v.dont { color: var(--dont); }
+  .steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; max-width: 72ch; }
+  .asks { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .asks li { display: grid; grid-template-columns: 170px 1fr; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+  .asks li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .asks strong { font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; font-weight: 600; }
+  .note { font-size: 13.5px; color: var(--ink-2); max-width: 72ch; }
+  footer { border-top: 1px solid var(--rule); padding-top: 16px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
+  footer a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 560px) {
+    .asks li { grid-template-columns: 1fr; gap: 4px; }
+    .lede { font-size: 16.5px; }
+  }
+</style>
+
+<main class="page">
+  <header>
+    <div class="eyebrow">Own Your Intelligence Hackathon · YC HQ · Sep 27, 2026</div>
+    <h1>Floodgate: a personal decision classifier trained on River</h1>
+    <p class="lede">We turned <code>Qwen3.6-35B-A3B</code> into a calibrated yes/no classifier using only River's sampling and LoRA training, then trained it on 273 labels from one person's own browsing history. On pages it never saw, agreement with that person's labels went from about 66–69% to 77–80% in 8 River steps.</p>
+    <p class="meta">Team: cyu60, quachphu, TriNguyen1110, AdityaGaur77, atilavahedian · Code: <a href="https://github.com/cyu60/floodgate">github.com/cyu60/floodgate</a></p>
+  </header>
+
+  <section>
+    <div class="eyebrow">The classifier</div>
+    <h2>A Jev-style decision model, built from River primitives</h2>
+    <p>Floodgate never generates text. Each question is a single prompt that ends in "Answer Yes or No." We ask River for one token with its top-20 logprobs and read the gap between "Yes" and "No". That gap is exactly the value Open-Jev uses to initialise its decision head (<code>lm_head[Yes] − lm_head[No]</code>), so the untrained base on River is Open-Jev at step 0. A single fitted temperature turns the gap into a calibrated probability.</p>
+    <div class="formula">score = logprob("Yes") − logprob("No") at the first answer token<br>P(yes) = sigmoid(score / T)</div>
+    <p>It answers two questions today:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Decision</th><th>What we ask</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td>Is this page a distraction?</td><td>One yes/no over URL, title, time and the task you said you're doing</td><td>P(distraction); the browser extension blocks above 0.7</td></tr>
+          <tr><td>Should I send this article to this person?</td><td>Four yes/no questions in one call: relevant to them, new to them, timely, appropriate for the relationship</td><td>Code combines them into <span class="v send">SEND</span> <span class="v hold">HOLD</span> <span class="v dont">DON'T SEND</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Our own labelled data</div>
+    <h2>273 labels from one person's Chrome history</h2>
+    <div class="facts">
+      <div class="fact"><b>~12,000</b><span>Chrome visits, Jun 25 – Sep 23</span></div>
+      <div class="fact"><b>120</b><span>real pages, each judged under 2 of 4 real tasks</span></div>
+      <div class="fact"><b>273</b><span>labelled rows: 170 distraction, 103 work</span></div>
+      <div class="fact"><b>50 of 120</b><span>pages flip answer depending on the task</span></div>
+    </div>
+    <ol class="steps">
+      <li>Pulled the pages simple domain rules can't judge (1,678 ambiguous pages) and sampled 120: 45 YouTube/Wikipedia/X pages, 20 Google searches, 35 domains the rules had never seen, 20 rule-flagged distractions.</li>
+      <li>Paired each page with two of four real tasks: building Floodgate, preparing a founder session, researching AI models, evening wind-down.</li>
+      <li>An LLM teacher (Codex) drafted a P(distraction) and a one-line reason for each of the 240 pairs from a short profile of the person, and the person chose to use them as drafted. We added 33 labels the person made by hand.</li>
+      <li>Split by page, not by row: 208 rows to train on, 65 held out, and no page appears in both.</li>
+    </ol>
+    <p class="note">No public data went into this model. The labels stay on the laptop; only the training rows went to River.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">The training run</div>
+    <h2>8 steps, about 2.5 minutes, no GPU of our own</h2>
+    <p>River only trains next-token prediction, so we graded exactly one token. Each row becomes the chat-templated prompt (thinking off) plus a single target token, "Yes" or "No". Every prompt position has weight 0, so only the answer token is trained. A soft label p becomes two rows: "Yes" weighted p and "No" weighted 1 − p, which equals cross-entropy against the soft label.</p>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+          <tr><th>Base model</th><td><code>Qwen/Qwen3.6-35B-A3B-FP8</code>, frozen</td></tr>
+          <tr><th>Adapter</th><td>LoRA rank 8 on attention + MLP, plus <code>train_unembed=True</code> so the Yes/No readout adapts like Open-Jev's head</td></tr>
+          <tr><th>Loss</th><td><code>cross_entropy</code> on the one answer token</td></tr>
+          <tr><th>Schedule</th><td>208 rows × 3 = 624 rows, 8 <code>train_step</code> calls of 78 rows, lr 2e-4, grad clip 1.0</td></tr>
+          <tr><th>Wall time</th><td class="num">149 s of training</td></tr>
+          <tr><th>Checkpoint</th><td><code>river://…/sampler_weights/floodgate-personal-v1</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <pre>client  = river.Client(api_key=RIVER_API_KEY)
+session = client.session(project="floodgate-personal-v1")
+base    = session.sample(prompts, base_model=BASE, max_tokens=1, logprobs=20)   # score untrained
+model   = session.create_model(BASE, river.LoraConfig(rank=8, train_unembed=True))
+model.train_step(rows, lr=2e-4, loss_fn="cross_entropy", grad_clip_norm=1.0)  # × 8
+mine    = model.sample(prompts, max_tokens=1, logprobs=20)                      # score trained
+ckpt    = model.save_weights("floodgate-personal-v1", mode="inference")
+serve   = session.sample(prompts, base_model=BASE, checkpoint=ckpt.path, max_tokens=1, logprobs=20)</pre>
+  </section>
+
+  <section>
+    <div class="eyebrow">Results</div>
+    <h2>It learned where this person's work ends</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>On 65 held-out rows</th><th class="num">Agreement with the person's labels</th><th class="num">Brier (lower is better)</th></tr></thead>
+        <tbody>
+          <tr><td>Untrained base</td><td class="num">66–69%</td><td class="num">0.160</td></tr>
+          <tr><td>floodgate-personal-v1</td><td class="num"><b>77–80%</b></td><td class="num"><b>0.056</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Ranges: 80.0% / 69.2% on live weights during training, 76.9% / 66.2% re-measured through the saved checkpoint. The difference is two rows out of 65.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Same page, two tasks (live)</th><th class="num">Building Floodgate</th><th class="num">Evening wind-down</th></tr></thead>
+        <tbody>
+          <tr><td>A webcomic chapter</td><td class="num">0.96, blocked</td><td class="num">0.13, allowed</td></tr>
+          <tr><td>A classic chess game video</td><td class="num">0.94, blocked</td><td class="num">0.17, allowed</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Should I send this to Aditya?</th><th class="num">Relevant</th><th class="num">New</th><th class="num">Timely</th><th class="num">Fits</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td>SemIf: Jev-style decisions in the browser, no server</td><td class="num">0.92</td><td class="num">0.78</td><td class="num">0.89</td><td class="num">0.91</td><td><span class="v send">SEND</span></td></tr>
+          <tr><td>Open-Jev, which he already builds on</td><td class="num">0.96</td><td class="num">0.13</td><td class="num">0.89</td><td class="num">0.87</td><td><span class="v hold">HOLD</span></td></tr>
+          <tr><td>Celebrity wedding dresses</td><td class="num">0.05</td><td class="num">0.84</td><td class="num">0.07</td><td class="num">0.35</td><td><span class="v dont">DON'T SEND</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The fine-tune generalised beyond its prompt wording: asked in SemIf's letter format ("A. No / B. Yes") instead of the Yes/No format it was trained on, the same checkpoint scores the same 76.9%.</p>
+    <p>The checkpoint is served behind a Jev-compatible <code>/v1/systemone</code> endpoint and used by the Floodgate Chrome extension and by agents in our QM workspace.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">For the River team</div>
+    <h2>What would make this better on River</h2>
+    <ul class="asks">
+      <li><strong>Exact logprobs for chosen tokens</strong><span>Returned logprobs are rounded coarsely (we saw "Yes" −0.63, "No" −1.00), so untrained scores cluster. A way to request exact logprobs for a list of token ids at one position would make every classifier like this cleaner and cheaper than top-20.</span></li>
+      <li><strong>Custom loss or a scalar head</strong><span>Open-Jev trains with candidate NLL plus a Brier term on a separate head. With cross-entropy only, we calibrate afterwards with a temperature. A Brier or softmax-over-candidates loss would close that gap.</span></li>
+      <li><strong>Sharing a checkpoint</strong><span>A teammate's River key gets <code>Checkpoint not found</code> for our checkpoint, so everyone reaches the model through one laptop. Granting another key access, or a small deployment on personal keys, would let a team share one personal model.</span></li>
+      <li><strong>Latency for gating</strong><span>About 4–8 s per decision on the shared pool is fine for a demo, but a browser gate wants under 1 s. A low-latency path for <code>max_tokens=1</code> scoring would unlock real-time use.</span></li>
+      <li><strong>Docs</strong><span>State the minimum Python version (3.9 has no wheel), document <code>chat_template_kwargs={"enable_thinking": False}</code> on <code>chat_complete</code>, and note that losses are summed over tokens.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>Built in one afternoon at the Own Your Intelligence Hackathon. Design credit: <a href="https://github.com/Zefan-Cai/Open-Jev">Open-Jev</a> (Zefan Cai) and <a href="https://github.com/TheoLeeCJ/SemIf-OpenJev">SemIf</a>; interface pattern from TypeSafe's Jev.</div>
+    <div>Code and model cards: <a href="https://github.com/cyu60/floodgate">github.com/cyu60/floodgate</a></div>
+  </footer>
+</main>
