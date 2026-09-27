@@ -1,0 +1,835 @@
+# River API
+
+River lets you sample from and fine-tune large hosted models through a single
+Python client (`river-client`).
+
+---
+
+## Installation
+
+```bash
+pip install river-client
+```
+
+---
+
+## Authentication
+
+Create an API key on the **API Keys** page of the console, then expose it to
+your environment:
+
+```bash
+export RIVER_API_KEY="rv_..."
+```
+
+The client reads your key explicitly — pass it when constructing the client:
+
+```python
+import os
+import river_client as river
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+```
+
+The default endpoint is `api.river.ai` over TLS; you don't need to set anything
+else.
+
+---
+
+## Available models
+
+River offers these base models:
+
+- `deepseek-ai/DeepSeek-V4-Flash-0731`
+- `nvidia/GLM-5.2-NVFP4`
+- `nvidia/GLM-5.2-NVFP4-262K`
+- `nvidia/Kimi-K2.6-NVFP4`
+- `nvidia/Kimi-K2.6-NVFP4-262K`
+- `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`
+- `Qwen/Qwen3.5-9B`
+- `Qwen/Qwen3.5-122B-A10B-FP8`
+- `Qwen/Qwen3.5-397B-A17B-FP8`
+- `Qwen/Qwen3.6-35B-A3B-FP8`
+- `Qwen/Qwen3.8-27B-FP8`
+- `zai-org/GLM-5.3-Flash`
+
+Access is granted per account, so not every model above is enabled for every
+API key.
+
+### Check what your key can use
+
+A minimal end-to-end check: connect, confirm the server is healthy, and print
+the base models your key can use.
+
+```python
+import os
+import river_client as river
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+
+print("healthy:", client.health_check())
+for name in client.get_capabilities():
+    print(name)
+```
+
+Example output:
+
+```text
+healthy: True
+Qwen/Qwen3.6-35B-A3B-FP8
+Qwen/Qwen3.5-397B-A17B-FP8
+nvidia/Kimi-K2.6-NVFP4
+nvidia/GLM-5.2-NVFP4
+```
+
+`get_capabilities()` is the authoritative source: it returns the live list of
+model names your key can pass as `base_model` in later calls. Always read it at
+runtime rather than hard-coding — the catalog changes over time, and it is
+scoped to your account, so it can return fewer models than the catalog above.
+
+If you'd like access to more models, reach out on
+[Discord](https://discord.gg/YjK48AuA8n) or email
+[support@river.ai](mailto:support@river.ai).
+
+---
+
+## How requests work: submit, then poll
+
+Most River operations (sampling, training steps, …) run on GPU workers and don't
+finish instantly, so the API is **asynchronous** — you submit a request, the
+server returns a `request_id`, and the result is fetched by polling that id.
+
+### The high-level way (recommended)
+
+The high-level methods do this for you. `client.sample(...)` **blocks** until the
+result is ready and returns it directly — no ids, no polling:
+
+```python
+import os
+import river_client as river
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+BASE = "Qwen/Qwen3.6-35B-A3B-FP8"
+
+samples = client.sample("What is 2 + 2? Answer briefly.", base_model=BASE, max_tokens=24)
+print(repr(samples[0].text))
+```
+
+Expected output (the Qwen models are reasoning models, so the text includes a
+`<think>…</think>` block):
+
+```text
+'\n\n<think>\n\n</think>\n\n4'
+```
+
+### The low-level way (submit + poll)
+
+Under the hood that's two steps. The `submit_*` methods expose them: submit
+returns immediately with a `request_id`, and `.result()` polls until the result
+is ready.
+
+```python
+with client.session() as session:
+    # 1. Submit — returns immediately with a request_id.
+    pending = session.submit_sample("What is 2 + 2? Answer briefly.", base_model=BASE, max_tokens=24)
+    print("request_id:", pending.request_id)
+
+    # 2. Poll — .result() returns the same list[list[Sample]] as client.sample().
+    groups = pending.result()
+    print(repr(groups[0][0].text))
+```
+
+Expected output:
+
+```text
+request_id: d8461f9d-8269-4410-bce1-39bfeee97abc
+'\n\n<think>\n\n</think>\n\n4'
+```
+
+Each request gets its own `request_id` (a UUID) — yours will differ. Submitting
+several requests before polling lets independent work run in parallel; we'll use
+that later for throughput.
+
+---
+
+## Supervised fine-tuning (SFT)
+
+Let's actually train a model. The task: **prefix `test-` to every word** of the
+input (e.g. `"hello world"` → `"test-hello test-world"`). It's a trivial pattern,
+so a tiny dataset and ~15 steps are enough to learn it — and to verify the whole
+training loop end to end.
+
+### 1. Build a tiny dataset
+
+Each example is a `(prompt, completion)` pair. We tokenize both and concatenate
+them into one `input_ids` sequence. Per-token `weights` mask the prompt with
+`0.0` so the loss is taken **only on the completion**, and `target_tokens` is the
+next-token target at each position (position `i` predicts `ids[i+1]`, so the mask
+is offset by one).
+
+```python
+import os
+import river_client as river
+from transformers import AutoTokenizer
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+BASE = "Qwen/Qwen3.6-35B-A3B-FP8"
+tok = AutoTokenizer.from_pretrained(BASE)
+EOS = tok.eos_token_id
+
+def target_for(x):
+    return " ".join("test-" + w for w in x.split())
+
+train_inputs = [
+    "hello world",
+    "good morning sunshine",
+    "the quick brown fox",
+    "i love programming",
+    "open the pod bay doors",
+    "river flows to the sea",
+]
+
+def render(x):
+    return f"Input: {x}\nOutput:"
+
+def make_datum(x):
+    prompt_ids = tok(render(x), add_special_tokens=False)["input_ids"]
+    completion_ids = tok(" " + target_for(x), add_special_tokens=False)["input_ids"] + [EOS]
+    ids = prompt_ids + completion_ids
+    target_tokens = ids[1:] + [EOS]
+    weights = [0.0] * (len(prompt_ids) - 1) + [1.0] * (len(completion_ids) + 1)
+    return {"input_ids": ids, "target_tokens": target_tokens, "weights": weights}
+
+batch = [make_datum(x) for x in train_inputs]
+```
+
+### 2. Create a session and train
+
+`client.session()` opens a training session (a context manager that frees the
+model on exit). `session.create_model(...)` creates a LoRA model to train, sized
+by `river.LoraConfig(rank=...)` (rank 1–32). Each step:
+`forward_backward(data, loss_fn="cross_entropy")` runs the forward pass and
+accumulates gradients (returns `.metrics["loss"]`), and `optim_step(lr=...)`
+applies an **AdamW** update and advances `model.step`.
+
+```python
+with client.session(project="sft-prefix") as session:
+    model = session.create_model(base_model=BASE, lora=river.LoraConfig(rank=32))
+    print("model_id:", model.model_id)
+
+    for step in range(15):
+        fb = model.forward_backward(batch, loss_fn="cross_entropy")
+        model.optim_step(lr=2e-4, grad_clip_norm=1.0)
+        print(f"step {model.step:2d}  loss={fb.metrics['loss']:.4f}")
+```
+
+The loss collapses within a handful of steps:
+
+```text
+model_id: ba1c7208-3c2a-442d-98f2-8aea7bb6980e:model:1
+step  1  loss=34.4821
+step  2  loss=19.3106
+step  3  loss=9.1079
+step  4  loss=3.2211
+step  5  loss=0.1230
+step  6  loss=0.0441
+step  7  loss=0.0037
+step  8  loss=0.0001
+...
+step 15  loss=0.0000
+```
+
+### 3. Sample from the trained model
+
+`model.sample(prompt, ...)` generates from the model's **current in-memory
+weights** (no checkpoint needed) and returns `list[list[Sample]]` (per-prompt ×
+per-sample). We sample greedily (`temperature=0.0`), still inside the session:
+
+```python
+    for x in ["hello world", "the lazy dog sleeps"]:
+        out = model.sample(render(x), max_tokens=16, temperature=0.0, stop=["\n"])
+        print(f"{x!r} -> {out[0][0].text!r}")
+```
+
+It learned the rule, and even generalizes to the unseen `"the lazy dog sleeps"`:
+
+```text
+'hello world' -> ' test-hello test-world'
+'the lazy dog sleeps' -> ' test-the test-lazy test-dog test-sleeps'
+```
+
+### 4. Save a checkpoint and sample from it
+
+`model.save_weights(name, mode="inference")` saves the LoRA as a checkpoint, and
+`session.sample(..., checkpoint=ckpt)` samples from a saved checkpoint — it loads
+the LoRA, generates, then unloads (no live model needed):
+
+```python
+    ckpt = model.save_weights("prefix", mode="inference")
+    print("saved:", ckpt.path)
+
+    for x in ["hello world", "the lazy dog sleeps"]:
+        out = session.sample(render(x), base_model=BASE, checkpoint=ckpt,
+                             max_tokens=16, temperature=0.0, stop=["\n"])
+        print(f"{x!r} -> {out[0][0].text!r}")
+```
+
+The checkpoint reproduces the same behavior:
+
+```text
+saved: river://6501216f-c72d-4186-a37c-b65bee62bf58/sampler_weights/prefix
+'hello world' -> ' test-hello test-world'
+'the lazy dog sleeps' -> ' test-the test-lazy test-dog test-sleeps'
+```
+
+Install the dependencies and run the whole thing:
+
+```bash
+pip install river-client
+export RIVER_API_KEY="rv_..."
+python sft.py
+```
+
+<details>
+<summary>Full runnable script (sft.py)</summary>
+
+```python
+import os
+import river_client as river
+from transformers import AutoTokenizer
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+BASE = "Qwen/Qwen3.6-35B-A3B-FP8"
+tok = AutoTokenizer.from_pretrained(BASE)
+EOS = tok.eos_token_id
+
+def target_for(x):
+    return " ".join("test-" + w for w in x.split())
+
+train_inputs = [
+    "hello world",
+    "good morning sunshine",
+    "the quick brown fox",
+    "i love programming",
+    "open the pod bay doors",
+    "river flows to the sea",
+]
+
+def render(x):
+    return f"Input: {x}\nOutput:"
+
+def make_datum(x):
+    prompt_ids = tok(render(x), add_special_tokens=False)["input_ids"]
+    completion_ids = tok(" " + target_for(x), add_special_tokens=False)["input_ids"] + [EOS]
+    ids = prompt_ids + completion_ids
+    target_tokens = ids[1:] + [EOS]
+    weights = [0.0] * (len(prompt_ids) - 1) + [1.0] * (len(completion_ids) + 1)
+    return {"input_ids": ids, "target_tokens": target_tokens, "weights": weights}
+
+batch = [make_datum(x) for x in train_inputs]
+
+with client.session(project="sft-prefix") as session:
+    model = session.create_model(base_model=BASE, lora=river.LoraConfig(rank=32))
+    print("model_id:", model.model_id)
+
+    # Train
+    for step in range(15):
+        fb = model.forward_backward(batch, loss_fn="cross_entropy")
+        model.optim_step(lr=2e-4, grad_clip_norm=1.0)
+        print(f"step {model.step:2d}  loss={fb.metrics['loss']:.4f}")
+
+    # Sample from the live trained weights
+    for x in ["hello world", "the lazy dog sleeps"]:
+        out = model.sample(render(x), max_tokens=16, temperature=0.0, stop=["\n"])
+        print(f"{x!r} -> {out[0][0].text!r}")
+
+    # Save an inference checkpoint and sample from it
+    ckpt = model.save_weights("prefix", mode="inference")
+    print("saved:", ckpt.path)
+    for x in ["hello world", "the lazy dog sleeps"]:
+        out = session.sample(render(x), base_model=BASE, checkpoint=ckpt,
+                             max_tokens=16, temperature=0.0, stop=["\n"])
+        print(f"{x!r} -> {out[0][0].text!r}")
+```
+
+</details>
+
+---
+
+## Dedicated streaming deployments
+
+Create a deployment to reserve serving capacity for a saved LoRA checkpoint,
+then stream from its URL with the OpenAI client. Use a team API key with
+deployment access for the checkpoint's base model; contact River to enable
+access. Personal API keys cannot create deployments.
+
+```bash
+pip install river-client openai
+```
+
+Save the trained model with `model.save_weights("serving-v1", mode="inference")`,
+then use the returned checkpoint path:
+
+```python
+import os
+
+import river_client as river
+from openai import OpenAI
+
+api_key = os.environ["RIVER_API_KEY"]
+client = river.Client(api_key=api_key, endpoint="api.river.ai")
+deployment = client.create_deployment(
+    checkpoint="river://YOUR_RUN_ID/sampler_weights/serving-v1",
+    unified_replicas=1,
+    idempotency_key="serving-v1",
+    wait=True,
+)
+print("Deployment:", deployment.id, deployment.base_url)
+
+with OpenAI(api_key=api_key, base_url=deployment.base_url) as inference:
+    with inference.chat.completions.create(
+        model=deployment.model,
+        messages=[{"role": "user", "content": "Hello"}],
+        stream=True,
+    ) as stream:
+        for chunk in stream:
+            if chunk.choices:
+                print(chunk.choices[0].delta.content or "", end="", flush=True)
+```
+
+The URL selects the checkpoint. It already includes the OpenAI API prefix;
+pass it unchanged as `base_url`. Creation is asynchronous: `wait=True` waits
+for serving capacity. To require every requested replica to be ready, call
+`client.wait_for_deployment(deployment.id, until=("ready",))`.
+Reuse an idempotency key when retrying the same creation request; use a new key
+for a new deployment.
+
+Capacity is specified in replicas. River selects the GPU shape for the model;
+one replica does not necessarily mean one GPU. Choose either
+`unified_replicas` or both `prefill_replicas` and `decode_replicas` at creation.
+The topology cannot be changed afterwards.
+
+### Scale, stop, and delete
+
+```python
+client.list_deployments()
+client.scale_on_target(deployment.id, unified_replicas=2)
+client.get_deployment_usage(deployment.id)
+
+# Release serving capacity while keeping the URL and checkpoint.
+client.scale_on_target(deployment.id, unified_replicas=0)
+client.wait_for_deployment(deployment.id, until=("scaled_to_zero",))
+
+# Resume on the same URL.
+client.scale_on_target(deployment.id, unified_replicas=1)
+client.wait_for_deployment(deployment.id)
+
+# Release the deployment when it is no longer needed.
+client.delete_deployment(deployment.id, wait=True)
+```
+
+Scaling sets absolute targets, not increments. For a prefill/decode deployment,
+scale both roles to zero together and both back up to resume. Scale-down and
+deletion drain active work before releasing resources. Requested GPU-hours
+start at create/scale acceptance and stop at scale-to-zero/delete acceptance;
+they include provisioning and outage time. Usage records report observed
+allocation separately.
+
+Use a fresh checkpoint name and a new deployment to update weights while the
+old deployment continues serving. Saving new weights at an existing checkpoint
+path does not reload running workers. To update at the same URL, scale to zero,
+wait for draining to finish, save the new weights, then restore capacity.
+
+Deployments also support stateless `/responses` requests: set `store=False`
+and send conversation history on each request. Stored responses,
+`previous_response_id`, and background processing are unsupported. If a stream
+fails after it starts, the application must decide whether to start a new
+request; an interrupted stream cannot be resumed.
+
+See the [Python API reference](/python-api/#clientcreate_deployment) for the
+deployment methods and parameters.
+
+## LoRA configuration
+
+`session.create_model(..., lora=river.LoraConfig(...))` controls the LoRA adapter
+that gets trained:
+
+```python
+river.LoraConfig(
+    rank=16,             # adapter rank — must be 1–32 (32 is the current max)
+    train_attn=True,     # adapt the attention projections
+    train_mlp=True,      # adapt the MLP / expert projections
+    train_unembed=False, # also adapt the output (unembedding) layer
+    seed=None,           # optional seed for reproducible LoRA init
+)
+```
+
+- **`rank`** — the adapter's capacity. **The maximum supported rank is 32**; a
+  larger value is rejected.
+- **`train_attn` / `train_mlp`** — which weight groups receive LoRA adapters
+  (attention vs. MLP/expert layers). Both default on.
+- **`train_unembed`** — also adapt the output/unembedding layer. Off by default;
+  RL runs often turn it on.
+
+---
+
+## Reinforcement learning (importance sampling)
+
+SFT imitates fixed answers; RL optimizes against a **reward**. Here we train on
+GSM8K math: for each question we sample a group of answers, reward the ones whose
+`\boxed{...}` matches the ground truth, turn rewards into **group-relative
+advantages** (GRPO-style), and update the policy with the **`importance_sampling`**
+loss.
+
+**Key detail — inputs to the `importance_sampling` loss.** It's an off-policy
+policy gradient. Each `forward_backward(loss_fn="importance_sampling")` datum
+carries three aligned per-token arrays:
+
+- **`input_ids`** — the full `prompt + completion` token sequence.
+- **`old_logprobs`** — the behavior policy's per-token logprobs, taken straight
+  from the sampler (`Sample.logprobs`). These define the importance ratio between
+  the current policy and the policy that generated the sample.
+- **`advantages`** — the per-token advantage (here, the group-relative reward).
+
+(`attention_mask` marks the valid tokens.) The arrays are built per **prediction
+position**:
+
+```python
+groups = model.sample(prompts, num_samples=group_size, max_tokens=128, stop=["<|im_end|>"])
+
+train_data = []
+for prompt_tokens, samples, answer in zip(prompt_token_lists, groups, answers):
+    rewards = [get_reward(s.text, answer) for s in samples]   # 1.0 if \boxed{} matches
+    mean_r = sum(rewards) / len(rewards)
+    if all(r == mean_r for r in rewards):
+        continue                                              # skip zero-advantage groups
+    ob = len(prompt_tokens)                                   # prompt length
+    for s, r in zip(samples, rewards):
+        adv = r - mean_r                                      # group-relative advantage
+        train_data.append({
+            "input_ids":      prompt_tokens + s.tokens,
+            "attention_mask": [1] * (ob + len(s.tokens)),
+            "old_logprobs":   [0.0] * (ob - 1) + s.logprobs + [0.0],   # sampler logprobs over completion
+            "advantages":     [0.0] * (ob - 1) + [adv] * len(s.tokens) + [0.0],
+        })
+
+model.forward_backward(train_data, loss_fn="importance_sampling")
+model.optim_step(lr=4e-5, beta1=0.9, beta2=0.95, eps=1e-8)   # AdamW update
+```
+
+`optim_step` applies an **AdamW** update (Adam with decoupled weight decay,
+default `0.01`); here we use `beta1=0.9, beta2=0.95`.
+
+The completion-aligned arrays start at `ob - 1` (the last prompt position is what
+predicts the first response token) and end with a trailing `0.0` for the
+no-next-token slot. The prompt positions are `0.0`, so loss/advantage apply only
+to generated tokens. `target_tokens` is omitted — the server shifts `input_ids`
+by one automatically.
+
+This run uses `batch_size=256`, `group_size=4`, `max_tokens=128`, `lora_rank=8`,
+and disables the model's thinking mode, on `Qwen/Qwen3.6-35B-A3B-FP8` — one epoch
+over GSM8K's 7,473 training questions is **29 steps**. The complete, runnable
+script is below.
+
+Install the dependencies and run it:
+
+```bash
+pip install river-client datasets transformers jinja2
+export RIVER_API_KEY="rv_..."
+python rl.py
+```
+
+<details>
+<summary>Full runnable script (rl.py)</summary>
+
+```python
+import os, re
+import datasets
+import river_client as river
+from transformers import AutoTokenizer
+
+MODEL = "Qwen/Qwen3.6-35B-A3B-FP8"
+BATCH_SIZE, GROUP_SIZE, MAX_TOKENS, LORA_RANK, LR = 256, 4, 128, 8, 4e-5
+
+# ── GSM8K reward: 1.0 if the last \boxed{...} matches the ground-truth number ──
+def extract_boxed(text):
+    out, stack = [], []
+    for i, ch in enumerate(text):
+        if ch == "{":
+            stack.append(i)
+        elif ch == "}" and stack:
+            s = stack.pop()
+            if text[:s].endswith("\\boxed"):
+                out.append(text[s + 1 : i])
+    return out[-1] if out else None
+
+def gsm8k_gt(answer_field):
+    for line in reversed(answer_field.splitlines()):
+        if line.strip().startswith("####"):
+            return line.strip()[4:].strip().lstrip(":").replace(",", "").strip()
+    return answer_field.strip()
+
+def get_reward(response, answer_field):
+    ext = extract_boxed(response)
+    if ext is None:
+        return 0.0
+    def norm(s):
+        s = s.replace(",", "").replace("$", "").replace(" ", "")
+        m = re.search(r"-?\d+\.?\d*", s)
+        return m.group(0) if m else s
+    try:
+        return 1.0 if float(norm(ext)) == float(norm(gsm8k_gt(answer_field))) else 0.0
+    except ValueError:
+        return 1.0 if norm(ext) == norm(gsm8k_gt(answer_field)) else 0.0
+
+tok = AutoTokenizer.from_pretrained(MODEL)
+train_ds = datasets.load_dataset("openai/gsm8k", "main")["train"]
+
+suffix = " Provide a numerical answer without units, written inside \\boxed{}."
+fewshot = [
+    {"role": "user", "content": "How many r's are in strawberry?" + suffix},
+    {"role": "assistant", "content": (
+        "Let's spell the word out and number all the letters: "
+        "1) s 2) t 3) r 4) a 5) w 6) b 7) e 8) r 9) r 10) y. "
+        "We have r's at positions 3, 8, and 9. \\boxed{3}")},
+]
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+n_batches = len(train_ds) // BATCH_SIZE   # 29
+
+with client.session() as session:
+    model = session.create_model(
+        base_model=MODEL, lora=river.LoraConfig(rank=LORA_RANK, train_unembed=True),
+    )
+    for step in range(n_batches):
+        rows = train_ds.select(range(step * BATCH_SIZE, step * BATCH_SIZE + BATCH_SIZE))
+
+        prompts, prompt_tok = [], []
+        for q in rows["question"]:
+            msgs = [*fewshot, {"role": "user", "content": q + suffix}]
+            text = tok.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+            prompts.append(text)
+            prompt_tok.append(tok.encode(text, add_special_tokens=False))
+
+        groups = model.sample(
+            prompts=prompts, num_samples=GROUP_SIZE, max_tokens=MAX_TOKENS,
+            stop=["<|im_end|>"], seed=step * len(prompts) * GROUP_SIZE)
+
+        train_data, all_rewards = [], []
+        for ptok, samples, answer in zip(prompt_tok, groups, rows["answer"]):
+            rewards = [get_reward(s.text, answer) for s in samples]
+            mean_r = sum(rewards) / len(rewards)
+            all_rewards.append(mean_r)
+            if all(r == mean_r for r in rewards):
+                continue
+            ob = len(ptok)
+            for s, r in zip(samples, rewards):
+                adv = r - mean_r
+                train_data.append({
+                    "input_ids": ptok + s.tokens,
+                    "attention_mask": [1] * (ob + len(s.tokens)),
+                    "old_logprobs": [0.0] * (ob - 1) + s.logprobs + [0.0],
+                    "advantages": [0.0] * (ob - 1) + [adv] * len(s.tokens) + [0.0],
+                })
+
+        if train_data:
+            model.forward_backward(train_data, loss_fn="importance_sampling")
+            model.optim_step(lr=LR, beta1=0.9, beta2=0.95, eps=1e-8)
+
+        reward = sum(all_rewards) / len(all_rewards) if all_rewards else 0.0
+        print(f"[step {step:2d}] reward={reward:.3f}")
+```
+
+</details>
+
+### Training run
+
+Running the script above for one full epoch (29 steps) on
+`Qwen/Qwen3.6-35B-A3B-FP8`, the mean GSM8K reward climbs from ~0.04 to ~0.93 —
+the model goes from almost never solving a problem to getting ~9 out of 10
+right:
+
+![Reward vs. training step](/rl-reward-curve.png)
+
+<details>
+<summary>Per-step reward (all 29 steps)</summary>
+
+```text
+[step  0] reward=0.044
+[step  1] reward=0.042
+[step  2] reward=0.128
+[step  3] reward=0.105
+[step  4] reward=0.137
+[step  5] reward=0.244
+[step  6] reward=0.310
+[step  7] reward=0.398
+[step  8] reward=0.519
+[step  9] reward=0.570
+[step 10] reward=0.590
+[step 11] reward=0.699
+[step 12] reward=0.698
+[step 13] reward=0.802
+[step 14] reward=0.851
+[step 15] reward=0.896
+[step 16] reward=0.887
+[step 17] reward=0.874
+[step 18] reward=0.921
+[step 19] reward=0.907
+[step 20] reward=0.903
+[step 21] reward=0.877
+[step 22] reward=0.952
+[step 23] reward=0.918
+[step 24] reward=0.922
+[step 25] reward=0.903
+[step 26] reward=0.924
+[step 27] reward=0.941
+[step 28] reward=0.934
+```
+
+</details>
+
+---
+
+## Loss functions
+
+Pass the loss name as `loss_fn` to `forward_backward`, and any loss-specific
+arguments as keyword arguments, e.g.
+`model.forward_backward(data, loss_fn="cispo", eps_max=8.0)`.
+
+> **All losses are summed over tokens** (not averaged). Each token's contribution
+> is scaled by its per-token field — **`weights`** for `cross_entropy`,
+> **`advantages`** for the RL losses. Setting a token's value to `0.0` removes it
+> from the loss; larger magnitudes weight it more. (This is why masking the prompt
+> with `0.0` restricts learning to the completion, and why the loss magnitude
+> grows with the number of contributing tokens.)
+
+| `loss_fn` | Use | Required per-datum fields | Arguments (default) |
+| --- | --- | --- | --- |
+| `cross_entropy` | Supervised fine-tuning | `input_ids`, `weights` (`target_tokens` optional) | — |
+| `importance_sampling` | Off-policy policy gradient | `input_ids`, `old_logprobs`, `advantages` | — |
+| `ppo` | Clipped policy optimization | `input_ids`, `old_logprobs`, `advantages` | `clip_low` (0.2), `clip_high` (0.2) |
+| `cispo` | Clipped importance-sampling PO | `input_ids`, `old_logprobs`, `advantages` | `eps_max` (6.0) |
+| `dro` | Direct reward optimization | `input_ids`, `old_logprobs`, `advantages` | `beta` (0.05) |
+
+What each one is, at a high level:
+
+- **`cross_entropy`** — standard supervised next-token loss. Trains the model to
+  imitate the target tokens; `weights` choose which tokens count (e.g. `1.0` on
+  the completion, `0.0` on the prompt). This is the SFT loss.
+- **`importance_sampling`** — the basic off-policy policy gradient. Each token's
+  update is scaled by its `advantage` and by the importance ratio between the
+  current policy and the sampler that produced it (`old_logprobs`). Simplest RL
+  loss; no clipping, so it can be noisy if the policy drifts far from the sampler.
+- **`ppo`** — importance sampling with the ratio **clipped** to
+  `[1 − clip_low, 1 + clip_high]`. The clip removes the incentive to move any
+  single token's probability too far in one step, which keeps updates stable.
+- **`cispo`** — clipped importance-sampling policy optimization. Instead of
+  clipping the objective, it **caps the importance ratio at `eps_max`** while
+  letting the gradient keep flowing through `log π`. Robust when samples are well
+  off-policy (the approach used in ScaleRL-style training).
+- **`dro`** — direct reward optimization. Adds a quadratic **anchor** (strength
+  `beta`) pulling the policy toward the sampler's logprobs while it chases
+  reward, trading a bit of reward for stability.
+
+All four RL losses consume the same per-datum fields (`old_logprobs` +
+`advantages`) and differ only in how they shape the update.
+
+> **Custom loss functions aren't supported yet.** Use one of the built-in losses
+> above; if you need a custom objective, reach out and we'll help.
+
+---
+
+## Throughput and batch size
+
+Training and inference run on an **autoscaling worker pool** — River scales
+capacity up and down automatically to match your load. Because there's fixed
+per-step overhead, **bigger batches generally give higher throughput**: packing
+more prompts/sequences into a single `forward_backward` or `sample` call
+amortizes that overhead.
+
+So don't be shy with batch size — you can push to **millions of total tokens per
+step** and the system will scale to handle it. If you're optimizing throughput,
+increase the batch (more prompts × longer sequences) and measure tokens/second
+rather than sending many small requests.
+
+---
+
+## Saving and resuming (checkpoints)
+
+`model.save_weights(name, mode=...)` writes the model's current weights to a
+`river://` checkpoint and returns a `Checkpoint` (`.path`, `.step`,
+`.checkpoint_type`). Two modes:
+
+- `mode="training"` — includes optimizer state, so you can **resume training**
+  later (and it can still be sampled from).
+- `mode="inference"` — PEFT weights only; smaller, for serving / sampling.
+
+**Resume:** the checkpoint `river://` path is all you need — it's durable, so you
+can resume in a **completely separate session** (or process, or machine) by
+passing the path to `session.create_model(checkpoint=...)`. For a training
+checkpoint this restores the weights **and** optimizer state.
+
+The example below runs **two independent sessions**: the first trains Model A on
+one 100-token random sequence and saves a checkpoint; the second knows nothing
+but the checkpoint path, and resumes from it. (We use random tokens purely to
+watch the loss continue across the resume — there's nothing meaningful to
+sample.)
+
+```python
+import os
+import random
+import river_client as river
+
+client = river.Client(api_key=os.environ["RIVER_API_KEY"])
+BASE = "Qwen/Qwen3.6-35B-A3B-FP8"
+
+# One fixed 100-token random sequence for the model to memorize.
+random.seed(0)
+ids = [random.randint(1, 32000) for _ in range(100)]
+data = [{"input_ids": ids, "target_tokens": ids[1:] + [ids[0]], "weights": [1.0] * 100}]
+
+# ── Session 1: train and save a checkpoint ──
+with client.session(project="ckpt-a") as session:
+    a = session.create_model(base_model=BASE, lora=river.LoraConfig(rank=8))
+    for _ in range(5):
+        r = a.forward_backward(data, loss_fn="cross_entropy")
+        a.optim_step(lr=1e-4)
+        print(f"A step {a.step} loss={r.metrics['loss']:.1f}")
+    ckpt = a.save_weights("ckpt_step5", mode="training")
+    print("saved:", ckpt.path)
+
+checkpoint_path = ckpt.path   # the only thing the next session needs
+
+# ── Session 2 (separate): resume from just the checkpoint path ──
+with client.session(project="ckpt-b") as session:
+    b = session.create_model(
+        base_model=BASE, lora=river.LoraConfig(rank=8), checkpoint=checkpoint_path,
+    )
+    rb = b.forward_backward(data, loss_fn="cross_entropy")
+    b.optim_step(lr=1e-4)
+    print(f"B first loss={rb.metrics['loss']:.1f}")
+```
+
+Output:
+
+```text
+A step 1 loss=1226.5
+A step 2 loss=1207.4
+A step 3 loss=1182.6
+A step 4 loss=1156.9
+A step 5 loss=1139.0
+saved: river://2c1ca407-1a5a-4228-bdad-0a70840b7841/weights/ckpt_step5
+B first loss=1117.1
+```
+
+Even though Model B is in a fresh session and only has the path, its first loss
+(`1117.1`) continues right where Model A left off (`1139.0`) — rather than jumping
+back near the starting loss. That's the checkpoint's weights and optimizer state
+being restored. (The client-side `model.step` counter starts at `0` again, since a
+bare path carries no step metadata; pass the `Checkpoint` object instead if you
+want the step restored too.)
+
+To **sample** from a saved checkpoint instead of resuming training, use
+`session.sample(..., checkpoint=ckpt)` — shown in
+[Supervised fine-tuning](#supervised-fine-tuning-sft) step 4.

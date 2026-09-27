@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate Labeler</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #2a2f3a; --text: #e8eaf0; --dim: #8b93a7;
+    --work: #3ddc97; --lean-work: #8fd3b0; --mixed: #f2c94c; --lean-dis: #f4a261; --dis: #ef476f; --accent: #6c9cff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+  header { display: flex; gap: 16px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+  .progress { flex: 1; min-width: 160px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--dim); white-space: nowrap; }
+  select, input[type=text], button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding: 20px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { order: 2; } }
+  .task { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .task label { color: var(--dim); font-size: 13px; }
+  .task input { flex: 1; min-width: 240px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; min-height: 260px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--panel2); color: var(--dim); border: 1px solid var(--line); }
+  .badge.unknown { color: #c7a6ff; } .badge.content { color: #7fd1ff; } .badge.search { color: #ffd27f; } .badge.known { color: var(--dim); }
+  .title { font-size: 24px; font-weight: 600; line-height: 1.25; margin: 4px 0 8px; overflow-wrap: anywhere; }
+  .url { font-family: var(--mono); font-size: 13px; color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+  .meta { display: flex; gap: 22px; margin-top: 16px; color: var(--dim); font-size: 13px; flex-wrap: wrap; align-items: flex-end; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .hours { display: flex; gap: 2px; align-items: flex-end; height: 28px; }
+  .hours i { display: block; width: 6px; background: var(--line); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .hours i.on { background: var(--accent); }
+  .hours i.night { opacity: .55; }
+  .seed { font-family: var(--mono); }
+  .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 22px; }
+  .scale button { padding: 14px 8px; border-radius: 10px; text-align: center; border-width: 2px; background: var(--panel2); }
+  .scale button small { display: block; color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .scale button kbd { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .scale .k1 { border-color: var(--work); } .scale .k2 { border-color: var(--lean-work); } .scale .k3 { border-color: var(--mixed); } .scale .k4 { border-color: var(--lean-dis); } .scale .k5 { border-color: var(--dis); }
+  .scale button:hover { background: var(--line); }
+  .row2 { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .row2 input { flex: 1; min-width: 200px; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 12px; line-height: 1.7; }
+  kbd.k { font-family: var(--mono); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filters button.on { border-color: var(--accent); color: var(--accent); }
+  .domains { max-height: 260px; overflow: auto; font-size: 13px; }
+  .domains div { display: flex; justify-content: space-between; padding: 4px 2px; cursor: pointer; border-radius: 4px; }
+  .domains div:hover { background: var(--panel2); }
+  .domains span { font-family: var(--mono); color: var(--dim); }
+  .recent { font-size: 13px; max-height: 240px; overflow: auto; }
+  .recent div { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .recent .p { font-family: var(--mono); width: 40px; flex: none; }
+  .recent .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dim); }
+  .recent button { padding: 1px 7px; font-size: 12px; }
+  .done { text-align: center; color: var(--dim); padding: 60px 0; font-size: 18px; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Habitect Gate · label</h1>
+  <div class="progress"><i id="bar"></i></div>
+  <span class="stat" id="stat">loading…</span>
+  <button id="export" title="download gate_labels.jsonl">Export .jsonl</button>
+</header>
+<main>
+  <section>
+    <div class="task">
+      <label>Stated task</label>
+      <select id="taskSel"></select>
+      <input type="text" id="taskCustom" placeholder="or type a custom task… (t)">
+    </div>
+    <div class="card" id="card"></div>
+    <div class="hint">
+      <kbd class="k">1</kbd>–<kbd class="k">5</kbd> label this URL ·
+      <kbd class="k">⇧</kbd>+<kbd class="k">1</kbd>–<kbd class="k">5</kbd> label the whole domain ·
+      <kbd class="k">s</kbd> skip · <kbd class="k">b</kbd> back · <kbd class="k">u</kbd> undo last ·
+      <kbd class="k">n</kbd> note · <kbd class="k">t</kbd> task · <kbd class="k">o</kbd> open page
+    </div>
+  </section>
+  <aside>
+    <div class="box">
+      <h2>Bucket</h2>
+      <div class="filters" id="filters"></div>
+    </div>
+    <div class="box">
+      <h2>Domains left</h2>
+      <div class="domains" id="domains"></div>
+    </div>
+    <div class="box">
+      <h2>Recent</h2>
+      <div class="recent" id="recent"></div>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const SCALE = [
+  { k: 1, p: 0.05, name: "Work",              sub: "clearly on task",           cls: "k1" },
+  { k: 2, p: 0.25, name: "Leaning work",      sub: "useful, slightly off",      cls: "k2" },
+  { k: 3, p: 0.50, name: "Genuinely mixed",   sub: "depends on the moment",     cls: "k3" },
+  { k: 4, p: 0.75, name: "Leaning distraction", sub: "procrastination-shaped", cls: "k4" },
+  { k: 5, p: 0.95, name: "Distraction",       sub: "lock it",                   cls: "k5" },
+];
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+let Q = { items: [], question: "", stated_tasks: [] };
+let labels = [];            // Open-Jev rows, in order labelled
+let labelled = new Map();   // url -> row
+let domainDone = new Map(); // domain -> row (scope=domain)
+let skipped = new Set();
+let history = [];           // ids visited, for "back"
+let filter = "all";
+let cur = null;
+const $ = (s) => document.querySelector(s);
+
+function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1400); }
+function task() { return $("#taskCustom").value.trim() || $("#taskSel").value; }
+function fmtTime(iso) { const d = new Date(iso); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} ${DAYS[d.getDay()]}`; }
+function stateFor(it, t) { return `URL: ${it.url.slice(0,200)} Title: ${it.title.slice(0,120)}. Time: ${fmtTime(it.last)}. Stated task: ${t}.`; }
+
+function rowFor(it, p, scope, note) {
+  return { state: stateFor(it, task()), question: Q.question, kind: "noul", options: ["no","yes"], target: [+(1-p).toFixed(3), +p.toFixed(3)],
+    metadata: { domain: it.domain, url: it.url, title: it.title, target_basis: "hand", scope, task: task(), note: note || "", visited: it.last, visits: it.visits, bucket: it.bucket, labeled_at: new Date().toISOString() } };
+}
+
+function isDone(it) { return labelled.has(it.url) || domainDone.has(it.domain); }
+function pending() { return Q.items.filter(it => !isDone(it) && !skipped.has(it.id) && (filter === "all" || it.bucket === filter)); }
+function next() {
+  const p = pending();
+  cur = p.length ? p[0] : null;
+  if (cur) history.push(cur.id);
+  render();
+}
+
+function render() {
+  const total = Q.items.length, done = Q.items.filter(isDone).length;
+  $("#bar").style.width = (100 * done / Math.max(1,total)) + "%";
+  $("#stat").textContent = `${done} / ${total} · ${labels.length} rows`;
+  renderDomains(); renderRecent(); renderFilters();
+  const c = $("#card");
+  if (!cur) { c.innerHTML = `<div class="done">Nothing left in this bucket. ${skipped.size ? skipped.size + " skipped — press s again to revisit." : ""}</div>`; return; }
+  const it = cur;
+  const maxH = Math.max(...it.hours, 1);
+  const hours = it.hours.map((n,h) => `<i class="${n ? "on":""} ${h < 7 || h >= 22 ? "night":""}" style="height:${Math.max(2, 28*n/maxH)}px" title="${h}:00 × ${n}"></i>`).join("");
+  const seed = it.seed == null ? "rules: unknown" : `rules: ${it.seed}`;
+  c.innerHTML = `
+    <div class="badges"><span class="badge ${it.bucket}">${it.bucket}</span><span class="badge">${it.domain}</span>${it.domain_total > 1 ? `<span class="badge">${it.domain_total} urls on this domain</span>` : ""}</div>
+    <div class="title">${esc(it.title)}</div>
+    <a class="url" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.url)}</a>
+    <div class="meta">
+      <div><b>${it.visits}</b> visit${it.visits===1?"":"s"}</div>
+      <div>last <b>${fmtTime(it.last)}</b> · ${it.last.slice(0,10)}</div>
+      <div title="visits by hour of day (00–23), dim = night"><div class="hours">${hours}</div></div>
+      <div class="seed">${seed}</div>
+    </div>
+    <div class="scale">${SCALE.map(s => `<button class="${s.cls}" data-k="${s.k}"><kbd>${s.k}</kbd> ${s.name}<small>${s.sub}</small></button>`).join("")}</div>
+    <div class="row2"><input type="text" id="note" placeholder="optional note: why? (n)"><button id="skip">skip (s)</button><button id="back">back (b)</button></div>`;
+  c.querySelectorAll(".scale button").forEach(b => b.onclick = (e) => label(+b.dataset.k, e.shiftKey));
+  $("#skip").onclick = skip; $("#back").onclick = back;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+
+function label(k, wholeDomain) {
+  if (!cur) return;
+  const s = SCALE.find(x => x.k === k); const note = ($("#note")?.value || "").trim();
+  if (wholeDomain) {
+    const items = Q.items.filter(it => it.domain === cur.domain && !labelled.has(it.url));
+    items.forEach((it, i) => { const r = rowFor(it, s.p, "domain", note); if (i === 0) domainDone.set(cur.domain, r); labels.push(r); labelled.set(it.url, r); });
+    toast(`${cur.domain} → ${s.name} (${items.length} urls, +${cur.domain_total - items.length} more at merge)`);
+  } else {
+    const r = rowFor(cur, s.p, "url", note); labels.push(r); labelled.set(cur.url, r);
+    toast(`${s.name} (p=${s.p})`);
+  }
+  save(); next();
+}
+function skip() { if (cur) { skipped.add(cur.id); if (!pending().length) skipped.clear(); } next(); }
+function back() { history.pop(); const id = history.pop(); if (!id) return; cur = Q.items.find(i => i.id === id); history.push(id); render(); }
+function undo() {
+  const r = labels.pop(); if (!r) return;
+  if (r.metadata.scope === "domain") { domainDone.delete(r.metadata.domain); for (const [u, x] of [...labelled]) if (x.metadata.domain === r.metadata.domain && x.metadata.scope === "domain") { labelled.delete(u); const i = labels.indexOf(x); if (i >= 0) labels.splice(i, 1); } }
+  else labelled.delete(r.metadata.url);
+  cur = Q.items.find(i => i.url === r.metadata.url) || cur; save(); render(); toast("undone");
+}
+
+function renderFilters() {
+  const counts = { all: Q.items.length };
+  Q.items.forEach(i => counts[i.bucket] = (counts[i.bucket]||0) + 1);
+  $("#filters").innerHTML = Object.entries(counts).map(([b,n]) => `<button class="${filter===b?"on":""}" data-b="${b}">${b} <span class="stat">${n}</span></button>`).join("");
+  $("#filters").querySelectorAll("button").forEach(b => b.onclick = () => { filter = b.dataset.b; next(); });
+}
+function renderDomains() {
+  const left = {}; Q.items.forEach(it => { if (!isDone(it)) left[it.domain] = (left[it.domain]||0) + 1; });
+  const rows = Object.entries(left).sort((a,b) => b[1]-a[1]).slice(0, 60);
+  $("#domains").innerHTML = rows.map(([d,n]) => `<div data-d="${esc(d)}">${esc(d)}<span>${n}</span></div>`).join("") || `<div style="color:var(--dim)">all labelled</div>`;
+  $("#domains").querySelectorAll("div[data-d]").forEach(el => el.onclick = () => { cur = Q.items.find(it => it.domain === el.dataset.d && !isDone(it)); if (cur) { history.push(cur.id); render(); } });
+}
+function renderRecent() {
+  const last = labels.slice(-12).reverse();
+  $("#recent").innerHTML = last.map(r => `<div><span class="p" style="color:${colorFor(r.target[1])}">${r.target[1]}</span><span class="t" title="${esc(r.metadata.title)}">${r.metadata.scope==="domain" ? "⌂ " : ""}${esc(r.metadata.title || r.metadata.url)}</span></div>`).join("") || `<div style="color:var(--dim)">no labels yet</div>`;
+}
+function colorFor(p) { return p < .2 ? "var(--work)" : p < .4 ? "var(--lean-work)" : p < .6 ? "var(--mixed)" : p < .8 ? "var(--lean-dis)" : "var(--dis)"; }
+
+let saveT;
+function save() {
+  try { localStorage.setItem("gate_labels", JSON.stringify(labels)); } catch {}
+  clearTimeout(saveT);
+  saveT = setTimeout(async () => {
+    try { const r = await fetch("/labels", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(labels) }); if (!r.ok) throw 0; }
+    catch { toast("server save failed — use Export"); }
+  }, 400);
+}
+$("#export").onclick = () => {
+  const blob = new Blob([labels.map(r => JSON.stringify(r)).join("\n") + "\n"], { type: "application/jsonl" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "gate_labels.jsonl"; a.click();
+};
+
+document.addEventListener("keydown", (e) => {
+  const inInput = ["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName);
+  if (inInput && e.key !== "Escape") return;
+  if (e.key === "Escape") { document.activeElement.blur(); return; }
+  const d = "!@#$%".indexOf(e.key) + 1;  // shift+digit on US layout
+  if (/^[1-5]$/.test(e.key)) return label(+e.key, e.shiftKey);
+  if (d) return label(d, true);
+  if (e.key === "s") return skip();
+  if (e.key === "b") return back();
+  if (e.key === "u") return undo();
+  if (e.key === "n") { e.preventDefault(); $("#note")?.focus(); return; }
+  if (e.key === "t") { e.preventDefault(); $("#taskCustom").focus(); return; }
+  if (e.key === "o" && cur) window.open(cur.url, "_blank");
+});
+
+(async function init() {
+  try { Q = await (await fetch("/queue")).json(); }
+  catch { $("#card").innerHTML = `<div class="done">Could not load /queue. Run:<br><code>python -m habitect_gate.label_queue && python -m habitect_gate.label_server</code></div>`; return; }
+  $("#taskSel").innerHTML = Q.stated_tasks.map(t => `<option>${esc(t)}</option>`).join("");
+  let prior = [];
+  try { prior = await (await fetch("/labels")).json(); } catch {}
+  if (!prior.length) { try { prior = JSON.parse(localStorage.getItem("gate_labels") || "[]"); } catch {} }
+  labels = prior;
+  for (const r of labels) { labelled.set(r.metadata.url, r); if (r.metadata.scope === "domain") domainDone.set(r.metadata.domain, r); }
+  next();
+})();
+</script>
+</body>
+</html>

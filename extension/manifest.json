@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Habitect Gate",
+  "version": "0.1.0",
+  "description": "Asks a River-trained open Jev whether the page you just opened is a distraction from your stated task, and locks it if so.",
+  "permissions": ["tabs", "storage", "webNavigation"],
+  "host_permissions": ["http://127.0.0.1:8790/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html" },
+  "web_accessible_resources": [{ "resources": ["lock.html"], "matches": ["<all_urls>"] }]
+}

@@ -1,0 +1,10 @@
+.venv/
+data/*.jsonl
+data/runs/
+__pycache__/
+*.pyc
+.env
+data/openjev/
+data/runs/*.log
+data/label_queue.json
+data/*.json
