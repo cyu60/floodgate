@@ -3,9 +3,11 @@
 // GBrain remembers what you know; Memorable remembers what you were in the middle of doing.
 //
 // What it does in Floodgate (enable it under Dashboard -> Model -> context providers):
-//   enrich : before a page is judged, recalls the procedure you are currently working through and passes the
-//            next step along as ctx.extra.memorable, so the model judges the page against what you are actually
-//            doing right now, not just the task sentence you typed.
+//   recall : if the procedure you are working through literally names this page's site, the page IS the work,
+//            so it votes "on task" and says which step. It only ever rescues a page, never blocks one: when the
+//            procedure says nothing about this site it returns null and the model decides as usual.
+//   enrich : passes the whole procedure along as ctx.extra.memorable, so the model judges the page against what
+//            you are actually doing right now, not just the task sentence you typed.
 //   health : initialize + tools/list, shows which recall tools the server exposes.
 //
 // Recall-only by design: Memorable records procedures from your agent sessions through its own CLI hooks
@@ -73,6 +75,29 @@ function textOf(result) {
   return (result?.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
 }
 
+/** The procedure text for this task, cached for a minute. "" when there is nothing to recall. */
+async function procedureFor(ctx, cfg) {
+  const hit = cache.get(ctx.task);
+  if (hit && Date.now() - hit.at < 60_000) return hit.text;
+  const tools = await connect(cfg);
+  const r = pick(tools, /recall|inject|procedure|workflow|search|find/i, cfg.recallTool);
+  if (!r) return "";
+  const out = await rpc(cfg, "tools/call", { name: r.name, arguments: argsFor(r, ctx.task) });
+  const text = textOf(out).slice(0, 400);
+  cache.set(ctx.task, { at: Date.now(), text });
+  return text;
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
+/** The line of the procedure that names this host, if any. */
+function stepMentioning(procedure, host) {
+  if (!host) return null;
+  return procedure.split("\n").find((line) => line.toLowerCase().includes(host.toLowerCase())) || null;
+}
+
 export default {
   id: "memorable",
   name: "Memorable procedures",
@@ -89,16 +114,16 @@ export default {
     return { ok: !!r, detail: `${tools.length} tools · recall: ${r?.name || "none"}` };
   },
 
+  async recall(page, ctx, cfg) {
+    if (!ctx.task) return null;
+    const step = stepMentioning(await procedureFor(ctx, cfg), hostOf(page.url));
+    if (!step) return null;
+    return { p: 0.1, reason: `Memorable: this is a step in what you're doing — ${step.trim()}`, source: "Memorable procedure" };
+  },
+
   async enrich(page, ctx, cfg) {
     if (!ctx.task) return {};
-    const hit = cache.get(ctx.task);
-    if (hit && Date.now() - hit.at < 60_000) return hit.text ? { memorable: hit.text } : {};
-    const tools = await connect(cfg);
-    const r = pick(tools, /recall|inject|procedure|workflow|search|find/i, cfg.recallTool);
-    if (!r) return {};
-    const out = await rpc(cfg, "tools/call", { name: r.name, arguments: argsFor(r, ctx.task) });
-    const text = textOf(out).slice(0, 400);
-    cache.set(ctx.task, { at: Date.now(), text });
+    const text = await procedureFor(ctx, cfg);
     return text ? { memorable: text } : {};
   },
 };

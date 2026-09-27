@@ -4,7 +4,8 @@ import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 PROCEDURE = [
     "Procedure: wire a sponsor provider into the Floodgate extension (run 4 times, last one succeeded).",
-    "  step 3 of 5 — copy providers/_template.js and fill in enrich()",
+    "  step 2 of 5 — check the training API reference at docs.river.ai",
+    "  step 3 of 5 — copy providers/_template.js and fill in recall() and enrich()",
     "  next: register it in providers/index.js, then reload the extension and hit Test connection",
 ]
 TOOLS = [{"name": "recall_procedure", "description": "recall the procedure for a task",
