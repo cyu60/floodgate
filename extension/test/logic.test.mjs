@@ -160,3 +160,19 @@ test("GBrain: the notes onLabel writes are read back as verdicts", async () => {
   assert.equal(c[0].title, 'GTA 6 "Leaked" trailer');
   assert.ok(c[1].ts > c[0].ts);
 });
+
+test("GBrain: recall gets the query, remember gets the fact plus the required provenance", async () => {
+  const { argsFor } = await import("../providers/gbrain.js");
+  const recall = { name: "recall", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" } } } };
+  const remember = {
+    name: "remember",
+    inputSchema: { type: "object", properties: { fact: { type: "string" }, provenance: { type: "string" }, entity: { type: "string" } }, required: ["fact", "provenance"] },
+  };
+  assert.deepEqual(argsFor(recall, "Floodgate correction https://x.com/"), { query: "Floodgate correction https://x.com/" });
+  const a = argsFor(remember, "note text");
+  assert.equal(a.fact, "note text");
+  assert.match(a.provenance, /Floodgate/);
+  assert.equal(a.entity, undefined, "entity is optional and left out");
+  const other = { name: "save_note", inputSchema: { properties: { content: { type: "string" } }, required: ["content"] } };
+  assert.deepEqual(argsFor(other, "t"), { content: "t" });
+});
