@@ -8,6 +8,9 @@ Team: [cyu60](https://github.com/cyu60), [quachphu](https://github.com/quachphu)
 
 A calibrated decision model (an **open Jev**) trained on **River**. Floodgate asks "is this page a distraction from what I said I'm doing?" before each page loads. Read the full PRD: [docs/PRD.md](docs/PRD.md). The pitch story and open team decisions: [docs/STORY-AND-DISCUSSION.md](docs/STORY-AND-DISCUSSION.md). Independent Codex review and how we win: [docs/CODEX-REVIEW.md](docs/CODEX-REVIEW.md).
 
+**Use Floodgate in your QM workspace:** copy the skill in, point it at a model endpoint, `qm up`. Step-by-step guide: [qm-plugin/README.md](qm-plugin/README.md).
+
+
 ## What we built today
 
 In one afternoon at the Own Your Intelligence Hackathon, we went from "can an open Jev run on River?" to a trained, calibrated, served model driving a browser gate:
